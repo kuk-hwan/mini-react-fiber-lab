@@ -6,7 +6,7 @@ test('DOM editing, history navigation, no-op and keyed reordering', async ({ pag
   await page.getByLabel('실험 예제', { exact: true }).selectOption('text');
   await page.getByRole('button', { name: 'Patch 적용' }).click();
   await expect(page.locator('#actual h2')).toHaveText('오늘도, 한 단계 성장.');
-  expect(await original.evaluate((node) => node === document.querySelector('#actual h2'))).toBe(
+  expect(await original!.evaluate((node) => node === document.querySelector('#actual h2'))).toBe(
     true,
   );
   await expect(page.locator('#metric-changes')).toHaveText('1operations');
@@ -20,7 +20,7 @@ test('DOM editing, history navigation, no-op and keyed reordering', async ({ pag
   await page.getByLabel('실험 예제', { exact: true }).selectOption('reorder');
   await page.getByRole('button', { name: 'Patch 적용' }).click();
   expect(
-    await first.evaluate((node) => node === document.querySelector('#actual [data-key="vdom"]')),
+    await first!.evaluate((node) => node === document.querySelector('#actual [data-key="vdom"]')),
   ).toBe(true);
   await expect(page.locator('#actual li').first()).toHaveAttribute('data-key', 'patch');
 });
@@ -47,7 +47,7 @@ test('task board events, memo reuse, batching and persistence', async ({ page })
 });
 
 test('responsive layout, keyboard patch and no application errors', async ({ page }) => {
-  const errors = [];
+  const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   await page.getByLabel('테스트 HTML 소스', { exact: true }).fill('<p>Keyboard patch</p>');

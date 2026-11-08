@@ -1,14 +1,14 @@
 # Fiber Lab · Mini React
 
-**Virtual DOM → Diff → Patch → Fiber → Hooks를 직접 구현한 Vanilla JavaScript 프로젝트입니다.**
+**Virtual DOM → Diff → Patch → Fiber → Hooks를 직접 구현한 Vanilla TypeScript 프로젝트입니다.**
 
-두 Phase가 같은 렌더링 엔진을 사용합니다. React, Vue, UI 라이브러리, 번들러 없이 브라우저 ES Modules로 실행합니다. 테스트 도구만 개발 의존성으로 사용합니다.
+두 Phase가 같은 렌더링 엔진을 사용합니다. 엔진·데모·테스트·설정 코드를 TypeScript로 작성하고 `strict` 타입 검사를 적용합니다. 개발 서버와 정적 빌드는 Vite, Node 테스트 실행은 tsx가 담당합니다. React, Vue 같은 UI 프레임워크와 런타임 npm 의존성은 사용하지 않습니다.
 
 ![DOM 실험실](docs/images/dom-lab.png)
 
 ## 빠른 실행
 
-Node.js 22 이상이 필요합니다. 개발·검증 환경은 Node.js 24입니다.
+Node.js 22.12 이상이 필요합니다. 개발·검증 환경은 Node.js 24입니다.
 
 ```bash
 git clone https://github.com/kuk-hwan/mini-react-fiber-lab.git
@@ -17,18 +17,19 @@ npm ci
 npm run dev
 ```
 
-[http://127.0.0.1:5173](http://127.0.0.1:5173)에서 확인하세요. HTML 파일을 직접 여는 `file://` 방식은 ES Module 보안 제약 때문에 지원하지 않습니다. 앱 실행 자체에는 npm 패키지가 필요하지 않아 `node scripts/serve.js`만으로도 실행할 수 있습니다.
+[http://127.0.0.1:5173](http://127.0.0.1:5173)에서 확인하세요. 브라우저는 `.ts` 파일을 직접 실행하지 않으므로 Vite가 개발 중에 JavaScript로 변환합니다. 배포할 때는 `dist/`의 컴파일된 정적 파일을 사용합니다.
 
 ```bash
-npm test                  # Node test runner + jsdom 단위·통합 테스트
+npm run typecheck         # 소스·테스트·설정 strict 타입 검사
+npm test                  # tsx + Node test runner + jsdom 단위·통합 테스트
 npm run test:coverage     # 커버리지
 npm run build             # 정적 결과물 dist/
 npx playwright install chromium
 npm run test:e2e          # 데스크톱 + 모바일 Chromium E2E
-node scripts/serve.js --dist  # 빌드 결과물 확인
+npm run preview           # 빌드 결과물 확인
 ```
 
-기본 포트가 사용 중이면 `PORT` 환경 변수를 바꾸세요. PowerShell 예: `$env:PORT=5174; npm run dev`.
+기본 포트가 사용 중이면 `npm run dev -- --port 5174`로 바꾸세요. E2E는 5173 포트를 사용합니다. CI의 E2E는 Vite preview를 통해 `dist/` 결과물을 검증합니다.
 
 ## 직접 해볼 수 있는 것
 
@@ -76,10 +77,10 @@ Fiber는 개별 작업 사이에 양보할 수 있는 트리입니다. **5ms 예
 
 Phase 1은 HTML 스냅샷끼리 `diff()`를 직접 실행합니다. Phase 2는 함수형 컴포넌트를 Fiber 작업으로 평가한 뒤 같은 `diffSteps()` / `patch()`로 host DOM을 갱신합니다. Phase 2만을 위한 별도 DOM 교체 구현은 없습니다.
 
-```js
-import { h, FunctionComponent, useState, useEffect, useMemo } from './src/core/index.js';
+```ts
+import { h, FunctionComponent, useState, useEffect, useMemo } from './src/core/index.ts';
 
-function Label({ value }) {
+function Label({ value }: { value: number }) {
   return h('strong', {}, value);
 } // 자식 Hook 금지
 
@@ -96,7 +97,9 @@ function Counter() {
   return h('button', { onClick: () => setCount((n) => n + 1) }, h(Label, { value: doubled }));
 }
 
-const app = new FunctionComponent(Counter).mount(document.querySelector('#root'));
+const root = document.querySelector('#root');
+if (!root) throw new Error('root 요소가 필요합니다.');
+const app = new FunctionComponent(Counter).mount(root);
 await app.whenIdle();
 // app.update({ ...newProps });
 // app.unmount();
@@ -106,21 +109,24 @@ await app.whenIdle();
 
 | 경로                   | 역할                                            |
 | ---------------------- | ----------------------------------------------- |
-| `src/core/vnode.js`    | h, DOM → VNode, key 매칭                        |
-| `src/core/dom.js`      | DOM 생성, 속성·이벤트·폼·SVG 반영               |
-| `src/core/diff.js`     | 5가지 핵심 변경 계획, 중복 key 검증, generator  |
-| `src/core/patch.js`    | 계획을 실제 DOM에 적용, key 이동·정체성 보존    |
-| `src/core/fiber.js`    | FunctionComponent, 작업 루프, commit, lifecycle |
-| `src/core/hooks.js`    | 호출 순서 기반 슬롯, 상태 큐, effect, memo      |
+| `src/core/vnode.ts`    | h, DOM → VNode, key 매칭                        |
+| `src/core/dom.ts`      | DOM 생성, 속성·이벤트·폼·SVG 반영               |
+| `src/core/diff.ts`     | 5가지 핵심 변경 계획, 중복 key 검증, generator  |
+| `src/core/patch.ts`    | 계획을 실제 DOM에 적용, key 이동·정체성 보존    |
+| `src/core/fiber.ts`    | FunctionComponent, 작업 루프, commit, lifecycle |
+| `src/core/hooks.ts`    | 호출 순서 기반 슬롯, 상태 큐, effect, memo      |
 | `src/lab/`             | Phase 1 편집기, HTML 제한, 이력                 |
-| `src/demo/board.js`    | Phase 2 루트와 순수 자식 컴포넌트               |
+| `src/demo/board.ts`    | Phase 2 루트와 순수 자식 컴포넌트               |
 | `tests/`               | 단위·통합·회귀 테스트 및 E2E                    |
 | `docs/ARCHITECTURE.md` | 핵심 코드 설명, 설계 판단, 학습 질문            |
 | `docs/REQUIREMENTS.md` | 과제 요구사항과 코드·검증 연결                  |
 
+공통 타입은 `src/core/types.ts`, DOM 유틸리티는 `src/shared/dom.ts`에 있습니다. `tsconfig.json`은 strict 타입 검사, `vite.config.ts`는 개발 서버와 정적 빌드를 설정합니다. 구성과 타입 설계는 [TypeScript 가이드](docs/TYPESCRIPT.md)를 참고하세요.
+
 ## 검증과 차별점
 
 - **41개 단위·통합·회귀 테스트**: 실제 DOM 객체의 동일성까지 검증
+- **컴파일 전용 타입 계약**: 잘못된 상태 값·updater 반환형·자식 props·effect 반환값·Patch 계획을 타입 검사에서 거부
 - 120개의 결정적 무작위 key 배열 변경을 새 렌더링 결과와 대조
 - 초기화·이벤트 교체·폼 값·SVG·주석·공백·빈 트리·중복 key 검사
 - Hook 순서 위반, render 중 DOM 불변, render 도중 들어온 상태 변경, unmount와 이전 setter 검사

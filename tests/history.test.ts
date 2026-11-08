@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { StateHistory } from '../src/lab/history.js';
-import { h } from '../src/core/index.js';
-const tree = (value) => h('p', {}, value);
+import { StateHistory } from '../src/lab/history.ts';
+import { h } from '../src/core/index.ts';
+const tree = (value: string) => h('p', {}, value);
 test('history captures immutable snapshots and returns defensive clones', () => {
   const initial = tree('a');
   const history = new StateHistory(initial);

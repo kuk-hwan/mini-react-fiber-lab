@@ -21,7 +21,10 @@ const safeAttributes = new Set(
   ),
 );
 
-export function sanitizeHTML(source, document = globalThis.document) {
+export function sanitizeHTML(
+  source: string,
+  document: Document = globalThis.document,
+): { fragment: DocumentFragment; removed: number } {
   const template = document.createElement('template');
   template.innerHTML = source;
   let removed = 0;
@@ -62,7 +65,7 @@ export function sanitizeHTML(source, document = globalThis.document) {
       element.setAttribute('rel', 'noopener noreferrer');
       element.removeAttribute('target');
     }
-    if (tag === 'input' && element.type === 'file') {
+    if (tag === 'input' && element.getAttribute('type') === 'file') {
       element.setAttribute('type', 'text');
       removed++;
     }

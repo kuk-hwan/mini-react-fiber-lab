@@ -1,19 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { environment } from './helpers.js';
-import { h, FunctionComponent, useState, useMemo, useEffect } from '../src/core/index.js';
+import { environment, query } from './helpers.ts';
+import { h, FunctionComponent, useState, useMemo, useEffect } from '../src/core/index.ts';
+import type {
+  Component,
+  ComponentOptions,
+  Deadline,
+  Scheduler,
+  StateSetter,
+} from '../src/core/index.ts';
 
-function mount(Component, options = {}) {
+function mount(Component: Component<object>, options: ComponentOptions = {}) {
   const { container, window } = environment();
   const instance = new FunctionComponent(Component, {}, options).mount(container);
   instance.flushSync();
   return { instance, container, window };
 }
 test('useState keeps independent slots, lazy init and stable setters', () => {
-  let setA,
-    setB,
-    init = 0,
-    previousSetter;
+  let setA!: StateSetter<number>;
+  let setB!: StateSetter<string>;
+  let init = 0;
+  let previousSetter: StateSetter<number> | undefined;
   const { instance, container } = mount(() => {
     const [a, setterA] = useState(() => {
       init++;
@@ -34,7 +41,7 @@ test('useState keeps independent slots, lazy init and stable setters', () => {
   instance.unmount();
 });
 test('three functional updates batch into a single commit and preserve DOM', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { instance, container } = mount(() => {
     const [n, s] = useState(0);
     set = s;
@@ -52,7 +59,7 @@ test('three functional updates batch into a single commit and preserve DOM', () 
   instance.unmount();
 });
 test('Object.is skips same direct value including NaN', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { instance } = mount(() => {
     const [n, s] = useState(NaN);
     set = s;
@@ -64,7 +71,7 @@ test('Object.is skips same direct value including NaN', () => {
   instance.unmount();
 });
 test('update queues use functional actions after value replacements in order', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { instance, container } = mount(() => {
     const [n, s] = useState(0);
     set = s;
@@ -78,9 +85,9 @@ test('update queues use functional actions after value replacements in order', (
   instance.unmount();
 });
 test('useMemo reuses values until Object.is dependencies change', () => {
-  let setCount,
-    setOther,
-    runs = 0;
+  let setCount!: StateSetter<number>;
+  let setOther!: StateSetter<number>;
+  let runs = 0;
   const { instance, container } = mount(() => {
     const [count, a] = useState(1);
     const [other, b] = useState(0);
@@ -102,8 +109,8 @@ test('useMemo reuses values until Object.is dependencies change', () => {
   instance.unmount();
 });
 test('memo without deps recomputes; empty dependencies are stable', () => {
-  let set,
-    all = 0,
+  let set!: StateSetter<number>;
+  let all = 0,
     once = 0;
   const { instance } = mount(() => {
     const [n, s] = useState(0);
@@ -119,8 +126,8 @@ test('memo without deps recomputes; empty dependencies are stable', () => {
   instance.unmount();
 });
 test('effects run after commit, clean up before changed setup and on unmount', () => {
-  const events = [];
-  let set;
+  const events: string[] = [];
+  let set!: StateSetter<number>;
   const { container } = environment();
   const instance = new FunctionComponent(() => {
     const [n, s] = useState(0);
@@ -138,8 +145,8 @@ test('effects run after commit, clean up before changed setup and on unmount', (
   assert.deepEqual(events, ['setup:0', 'cleanup:0', 'setup:1', 'cleanup:1']);
 });
 test('empty effect deps run once; omitted deps run every commit', () => {
-  let set,
-    once = 0,
+  let set!: StateSetter<number>;
+  let once = 0,
     every = 0;
   const { instance } = mount(() => {
     const [n, s] = useState(0);
@@ -183,7 +190,7 @@ test('hooks outside root and hooks in children fail explicitly', () => {
   instance.unmount();
 });
 test('hook order and conditional count changes fail before DOM commit', () => {
-  let set;
+  let set!: StateSetter<boolean>;
   const { instance, container } = mount(() => {
     const [n, s] = useState(false);
     set = s;
@@ -194,7 +201,7 @@ test('hook order and conditional count changes fail before DOM commit', () => {
   assert.throws(() => instance.flushSync(), /개수/);
   assert.equal(container.textContent, 'false');
   instance.unmount();
-  let change;
+  let change!: StateSetter<boolean>;
   const f = mount(() => {
     const [n, s] = useState(false);
     change = s;
@@ -207,8 +214,8 @@ test('hook order and conditional count changes fail before DOM commit', () => {
   f.instance.unmount();
 });
 test('props-only child functions rerender and keyed components preserve host identity', () => {
-  let reverse;
-  const Item = ({ value }) => h('li', {}, value);
+  let reverse!: () => void;
+  const Item = ({ value }: { value: string }) => h('li', {}, value);
   const { instance, container } = mount(() => {
     const [items, set] = useState(['a', 'b', 'c']);
     reverse = () => set((v) => [...v].reverse());
@@ -218,16 +225,16 @@ test('props-only child functions rerender and keyed components preserve host ide
       items.map((value) => h(Item, { key: value, value })),
     );
   });
-  const first = container.querySelector('li');
+  const first = query(container, 'li');
   reverse();
   instance.flushSync();
-  assert.equal(container.querySelector('ul').lastChild, first);
+  assert.equal(query(container, 'ul').lastChild, first);
   assert.equal(container.textContent, 'cba');
   instance.unmount();
 });
 test('Fiber render yields without touching DOM until a complete commit', () => {
-  const callbacks = [];
-  const schedule = (callback) => {
+  const callbacks: { callback: (deadline: Deadline) => void; cancelled: boolean }[] = [];
+  const schedule: Scheduler = (callback) => {
     const entry = { callback, cancelled: false };
     callbacks.push(entry);
     return () => {
@@ -245,19 +252,19 @@ test('Fiber render yields without touching DOM until a complete commit', () => {
     {},
     { schedule },
   ).mount(container);
-  callbacks.shift().callback({ timeRemaining: () => 0 });
+  callbacks.shift()!.callback({ timeRemaining: () => 0 });
   assert.equal(container.childNodes.length, 0);
   assert.ok(instance.work);
   instance.flushSync();
   assert.equal(container.querySelectorAll('li').length, 20);
   assert.ok(instance.metrics.yields > 0);
-  assert.ok(instance.current.child.return === instance.current);
+  assert.ok(instance.current?.child?.return === instance.current);
   instance.unmount();
 });
 test('updates arriving during yielded render are preserved for next commit', () => {
-  let set;
-  const callbacks = [];
-  const schedule = (callback) => {
+  let set!: StateSetter<number>;
+  const callbacks: ((deadline: Deadline) => void)[] = [];
+  const schedule: Scheduler = (callback) => {
     callbacks.push(callback);
     return () => {};
   };
@@ -281,7 +288,7 @@ test('updates arriving during yielded render are preserved for next commit', () 
   instance.unmount();
 });
 test('unmount cancels unfinished work and later state setters are no-ops', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { instance, container } = mount(() => {
     const [n, s] = useState(0);
     set = s;

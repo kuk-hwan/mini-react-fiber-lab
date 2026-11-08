@@ -1,26 +1,55 @@
-import { h, FunctionComponent, useState, useMemo, useEffect } from '../core/index.js';
+import { h, FunctionComponent, useState, useMemo, useEffect } from '../core/index.ts';
+import type { Fiber, VNode } from '../core/index.ts';
+import { mustQuery, inputValue } from '../shared/dom.ts';
+
+interface Task {
+  id: string;
+  title: string;
+  category: string;
+  done: boolean;
+}
+interface TaskRowProps {
+  task: Task;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+type Filter = 'all' | 'active' | 'done';
+const filters: [Filter, string][] = [
+  ['all', '전체'],
+  ['active', '진행 중'],
+  ['done', '완료'],
+];
+
+function isTask(value: unknown): value is Task {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'title' in value &&
+    typeof value.title === 'string' &&
+    'done' in value &&
+    typeof value.done === 'boolean' &&
+    'category' in value &&
+    typeof value.category === 'string'
+  );
+}
 
 const STORAGE = 'fiber-lab-tasks-v1';
-const initialTasks = [
+const initialTasks: Task[] = [
   { id: 'vdom', title: 'DOM에서 Virtual DOM 추출하기', category: 'ENGINE', done: true },
   { id: 'diff', title: '다섯 가지 Diff 케이스 구현하기', category: 'ENGINE', done: true },
   { id: 'fiber', title: 'Fiber 작업 루프 연결하기', category: 'ARCHITECTURE', done: false },
   { id: 'hooks', title: '나만의 Hooks 완성하기', category: 'HOOKS', done: false },
 ];
 
-function loadTasks() {
+function loadTasks(): Task[] {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE));
+    const saved: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? 'null');
     if (
       Array.isArray(saved) &&
       saved.length <= 500 &&
-      saved.every(
-        (task) =>
-          typeof task.id === 'string' &&
-          typeof task.title === 'string' &&
-          typeof task.done === 'boolean' &&
-          typeof task.category === 'string',
-      ) &&
+      saved.every(isTask) &&
       new Set(saved.map((t) => t.id)).size === saved.length
     )
       return saved;
@@ -31,7 +60,7 @@ function loadTasks() {
 }
 
 // Children are pure functions of props. All hooks below belong to Board only.
-function TaskRow({ task, onToggle, onDelete }) {
+function TaskRow({ task, onToggle, onDelete }: TaskRowProps): VNode {
   return h(
     'li',
     { className: `task-row ${task.done ? 'task-done' : ''}`, 'data-task-id': task.id },
@@ -68,7 +97,7 @@ function TaskRow({ task, onToggle, onDelete }) {
   );
 }
 
-function ProgressCard({ completed, total }) {
+function ProgressCard({ completed, total }: { completed: number; total: number }): VNode {
   const percent = total ? Math.round((completed / total) * 100) : 0;
   return h(
     'aside',
@@ -105,7 +134,7 @@ export function setupBoard() {
     const [tasks, setTasks] = useState(loadTasks);
     const [draft, setDraft] = useState('');
     const [query, setQuery] = useState('');
-    const [filter, setFilter] = useState('all');
+    const [filter, setFilter] = useState<Filter>('all');
     const [batchCount, setBatchCount] = useState(0);
     const [feedback, setFeedback] = useState('작업을 추가하거나 완료해 보세요.');
     const derived = useMemo(() => {
@@ -134,7 +163,7 @@ export function setupBoard() {
         document.title = previousTitle;
       };
     }, [tasks]);
-    const addTask = (event) => {
+    const addTask = (event: SubmitEvent): void => {
       event.preventDefault();
       if (!draft.trim()) {
         setFeedback('작업 이름을 입력해 주세요.');
@@ -180,7 +209,7 @@ export function setupBoard() {
               placeholder: '다음으로 만들고 싶은 것은?',
               value: draft,
               maxLength: 120,
-              onInput: (event) => setDraft(event.target.value),
+              onInput: (event) => setDraft(inputValue(event)),
             }),
             h('button', { type: 'submit', className: 'primary-button' }, '+ 추가'),
           ),
@@ -190,11 +219,7 @@ export function setupBoard() {
             h(
               'div',
               { className: 'filter-tabs', role: 'group', 'aria-label': '작업 필터' },
-              ...[
-                ['all', '전체'],
-                ['active', '진행 중'],
-                ['done', '완료'],
-              ].map(([value, label]) =>
+              ...filters.map(([value, label]) =>
                 h(
                   'button',
                   {
@@ -213,7 +238,7 @@ export function setupBoard() {
               'aria-label': '작업 검색',
               placeholder: '작업 검색…',
               value: query,
-              onInput: (event) => setQuery(event.target.value),
+              onInput: (event) => setQuery(inputValue(event)),
             }),
           ),
           h(
@@ -293,8 +318,8 @@ export function setupBoard() {
     {},
     {
       onCommit(metrics) {
-        const stats = document.querySelector('#fiber-stats');
-        const items = [
+        const stats = mustQuery('#fiber-stats');
+        const items: [string, string | number][] = [
           ['COMMITS', metrics.commits],
           ['FIBER UNITS', metrics.units],
           ['YIELDS', metrics.yields],
@@ -315,29 +340,30 @@ export function setupBoard() {
         );
         stats.title = `${diagnostics.storage} · Commit ${metrics.commitMs.toFixed(2)}ms`;
         const lines = [];
-        const stack = [[metrics.root, 0]];
+        const stack: [Fiber, number][] = [[metrics.root, 0]];
         while (stack.length) {
-          const [fiber, depth] = stack.pop();
+          const [fiber, depth] = stack.pop()!;
           lines.push(
             `${'  '.repeat(depth)}${typeof fiber.type === 'function' ? fiber.type.name : fiber.type}${fiber.key == null ? '' : ` [key=${fiber.key}]`}${fiber.alternate ? ' ↔ alternate' : ' + new'}`,
           );
           if (fiber.sibling) stack.push([fiber.sibling, depth]);
           if (fiber.child) stack.push([fiber.child, depth + 1]);
         }
-        document.querySelector('#fiber-tree').textContent = lines.join('\n');
+        mustQuery('#fiber-tree').textContent = lines.join('\n');
       },
       onError(error) {
-        const box = document.querySelector('#hooks-error');
+        const box = mustQuery('#hooks-error');
         box.hidden = false;
         box.textContent = error.message;
       },
     },
-  ).mount(document.querySelector('#hooks-app'));
-  document.querySelector('#toggle-fiber').addEventListener('click', (event) => {
-    const tree = document.querySelector('#fiber-tree');
+  ).mount(mustQuery('#hooks-app'));
+  const toggle = mustQuery<HTMLButtonElement>('#toggle-fiber');
+  toggle.addEventListener('click', () => {
+    const tree = mustQuery('#fiber-tree');
     tree.hidden = !tree.hidden;
-    event.currentTarget.textContent = tree.hidden ? '트리 펼치기 ↓' : '트리 접기 ↑';
-    event.currentTarget.setAttribute('aria-expanded', String(!tree.hidden));
+    toggle.textContent = tree.hidden ? '트리 펼치기 ↓' : '트리 접기 ↑';
+    toggle.setAttribute('aria-expanded', String(!tree.hidden));
   });
   return instance;
 }

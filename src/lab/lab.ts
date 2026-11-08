@@ -1,6 +1,8 @@
-import { domToVNode, createDOM, diff, patch } from '../core/index.js';
-import { StateHistory } from './history.js';
-import { sanitizeHTML } from './sanitize.js';
+import { domToVNode, createDOM, diff, patch } from '../core/index.ts';
+import { StateHistory } from './history.ts';
+import { sanitizeHTML } from './sanitize.ts';
+import { mustQuery, inputValue, errorMessage } from '../shared/dom.ts';
+import type { PatchOperation, VNode } from '../core/index.ts';
 
 const base = `<article class="demo-card">
   <span class="demo-eyebrow">TODAY'S SMALL WINS</span>
@@ -15,10 +17,10 @@ const base = `<article class="demo-card">
 </article>`;
 
 export function setupLab() {
-  const $ = (selector) => document.querySelector(selector);
+  const $ = mustQuery;
   const actual = $('#actual'),
     test = $('#test'),
-    source = $('#source');
+    source = $<HTMLTextAreaElement>('#source');
   const wrap = document.createElement('div');
   wrap.className = 'sample-document';
   wrap.append(sanitizeHTML(base).fragment);
@@ -28,20 +30,20 @@ export function setupLab() {
   test.append(createDOM(current));
   source.value = base;
   let dirty = false;
-  let timer;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let sourcePending = false;
-  const message = (text, error = false) => {
+  const message = (text: string, error = false): void => {
     $('#lab-message').textContent = text;
     $('#lab-message').classList.toggle('error', error);
   };
-  const setDirty = (value) => {
+  const setDirty = (value: boolean): void => {
     dirty = value;
     $('#dirty-status').textContent = value ? '미적용 변경 있음' : '동기화됨';
     $('#dirty-status').classList.toggle('dirty', value);
   };
   const observer = new MutationObserver(() => {
     setDirty(true);
-    source.value = test.firstChild?.innerHTML ?? '';
+    source.value = test.firstElementChild?.innerHTML ?? '';
   });
   const observe = () =>
     observer.observe(test, {
@@ -51,7 +53,7 @@ export function setupLab() {
       attributes: true,
     });
   observe();
-  const replaceTest = (tree) => {
+  const replaceTest = (tree: VNode): void => {
     observer.disconnect();
     test.replaceChildren(createDOM(tree));
     observe();
@@ -79,20 +81,20 @@ export function setupLab() {
     timer = setTimeout(syncSource, 180);
   });
   test.addEventListener('input', () => {
-    source.value = test.firstChild?.innerHTML ?? '';
+    source.value = test.firstElementChild?.innerHTML ?? '';
     setDirty(true);
   });
   // Links and forms are content under test, not navigation or submission targets.
   for (const region of [actual, test]) {
     region.addEventListener('click', (event) => {
-      if (event.target.closest('a')) event.preventDefault();
+      if ((event.target as Element | null)?.closest('a')) event.preventDefault();
     });
     region.addEventListener('submit', (event) => event.preventDefault());
   }
   test.addEventListener('paste', (event) => {
     event.preventDefault();
     const selection = window.getSelection();
-    if (!selection.rangeCount) return;
+    if (!selection?.rangeCount || !event.clipboardData) return;
     const range = selection.getRangeAt(0);
     if (!test.contains(range.commonAncestorContainer)) return;
     range.deleteContents();
@@ -102,8 +104,8 @@ export function setupLab() {
     range.collapse(true);
   });
   function renderHistory() {
-    $('#undo').disabled = !history.canUndo;
-    $('#redo').disabled = !history.canRedo;
+    $<HTMLButtonElement>('#undo').disabled = !history.canUndo;
+    $<HTMLButtonElement>('#redo').disabled = !history.canRedo;
     $('#history-position').textContent =
       `${String(history.index + 1).padStart(2, '0')} / ${String(history.entries.length).padStart(2, '0')}`;
     $('#metric-history').replaceChildren(String(history.entries.length), small('snapshot'));
@@ -126,9 +128,9 @@ export function setupLab() {
     );
     $('#tree-view').textContent = JSON.stringify(current, null, 2);
   }
-  function renderLog(operations) {
+  function renderLog(operations: PatchOperation[]): void {
     $('#log-count').textContent = `${operations.length} changes`;
-    const nodes = operations.map((operation) => {
+    const nodes: HTMLElement[] = operations.map((operation) => {
       const row = document.createElement('div');
       row.className = 'log-row';
       const badge = document.createElement('b');
@@ -149,11 +151,11 @@ export function setupLab() {
     }
     $('#change-log').replaceChildren(...nodes);
   }
-  function apply(next) {
+  function apply(next: VNode): PatchOperation[] {
     const before = [...actual.querySelectorAll('*')];
     const start = performance.now();
     const plan = diff(current, next);
-    const operations = [];
+    const operations: PatchOperation[] = [];
     patch(actual.firstChild, plan, actual, operations);
     const elapsed = performance.now() - start;
     current = next;
@@ -177,13 +179,13 @@ export function setupLab() {
         !test.firstChild ||
         test.childNodes.length !== 1 ||
         test.firstChild.nodeType !== 1 ||
-        !test.firstChild.classList.contains('sample-document')
+        !(test.firstChild as Element).classList.contains('sample-document')
       ) {
         source.value = test.innerHTML;
         sourcePending = true;
         syncSource();
       }
-      const next = domToVNode(test.firstChild);
+      const next = domToVNode(test.firstChild!);
       const changes = apply(next);
       history.push(next, changes.length ? `Patch · ${changes.length}개 변경` : '동일 상태');
       setDirty(false);
@@ -194,16 +196,16 @@ export function setupLab() {
           : '변경 사항이 없어 새 이력을 만들지 않았습니다.',
       );
     } catch (error) {
-      message(error.message, true);
+      message(errorMessage(error), true);
     }
   }
-  function navigate(index) {
+  function navigate(index: number): void {
     clearTimeout(timer);
     sourcePending = false;
     const next = history.go(index);
     apply(next);
     replaceTest(next);
-    source.value = test.firstChild.innerHTML;
+    source.value = test.firstElementChild!.innerHTML;
     setDirty(false);
     renderHistory();
     message(`${index + 1}번 상태로 이동했습니다. 실제 영역과 테스트 영역을 함께 복원했습니다.`);
@@ -219,7 +221,7 @@ export function setupLab() {
   });
   $('#code-mode').addEventListener('click', () => mode(false));
   $('#preview-mode').addEventListener('click', () => mode(true));
-  function mode(preview) {
+  function mode(preview: boolean): void {
     syncSource();
     $('#source-wrap').hidden = preview;
     test.hidden = !preview;
@@ -230,7 +232,7 @@ export function setupLab() {
   }
   $('#log-tab').addEventListener('click', () => inspector(false));
   $('#tree-tab').addEventListener('click', () => inspector(true));
-  function inspector(tree) {
+  function inspector(tree: boolean): void {
     $('#change-log').hidden = tree;
     $('#tree-view').hidden = !tree;
     $('#log-tab').classList.toggle('active', !tree);
@@ -238,9 +240,9 @@ export function setupLab() {
     $('#log-tab').setAttribute('aria-pressed', String(!tree));
     $('#tree-tab').setAttribute('aria-pressed', String(tree));
   }
-  $('#preset').addEventListener('change', (event) => {
+  $<HTMLSelectElement>('#preset').addEventListener('change', (event) => {
     let html = base;
-    switch (event.target.value) {
+    switch (inputValue(event)) {
       case 'text':
         html = base.replace('조금씩, 더 나은 코드.', '오늘도, 한 단계 성장.');
         break;
@@ -297,7 +299,7 @@ export function setupLab() {
   };
 }
 
-function small(value) {
+function small(value: string): HTMLElement {
   const node = document.createElement('small');
   node.textContent = value;
   return node;

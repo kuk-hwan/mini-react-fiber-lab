@@ -1,6 +1,7 @@
-import { TEXT, COMMENT, assertUniqueKeys } from './vnode.js';
+import { TEXT, COMMENT, assertUniqueKeys } from './vnode.ts';
+import type { VNode } from './types.ts';
 
-const isEvent = (name) => /^on[A-Z]/.test(name);
+const isEvent = (name: string): boolean => /^on[A-Z]/.test(name);
 const booleanProps = new Set([
   'checked',
   'disabled',
@@ -11,23 +12,30 @@ const booleanProps = new Set([
   'autofocus',
   'hidden',
 ]);
-const attributeName = (name) =>
-  ({ className: 'class', htmlFor: 'for', readOnly: 'readonly' })[name] ?? name;
+const aliases: Record<string, string> = {
+  className: 'class',
+  htmlFor: 'for',
+  readOnly: 'readonly',
+};
+const attributeName = (name: string): string => aliases[name] ?? name;
 
-export function setProp(dom, name, previous, value) {
+export function setProp(dom: Element, name: string, previous: unknown, value: unknown): void {
   if (name === 'children' || name === 'key') return;
   if (isEvent(name)) {
     const capture = name.endsWith('Capture');
     const event = name.slice(2, capture ? -7 : undefined).toLowerCase();
-    if (typeof previous === 'function') dom.removeEventListener(event, previous, capture);
-    if (typeof value === 'function') dom.addEventListener(event, value, capture);
+    if (typeof previous === 'function')
+      dom.removeEventListener(event, previous as EventListener, capture);
+    if (typeof value === 'function') dom.addEventListener(event, value as EventListener, capture);
   } else if (name === 'style' && (typeof value === 'object' || typeof previous === 'object')) {
     dom.removeAttribute('style');
     if (typeof value === 'string') dom.setAttribute('style', value);
-    else
+    else if ('style' in dom)
       for (const [key, val] of Object.entries(value ?? {})) {
-        if (key.startsWith('--') || key.includes('-')) dom.style.setProperty(key, val);
-        else dom.style[key] = val;
+        const style = (dom as HTMLElement | SVGElement).style;
+        if (key.startsWith('--') || key.includes('-'))
+          style.setProperty(key, val == null ? '' : String(val));
+        else Reflect.set(style, key, val);
       }
   } else if (name === 'value' && 'value' in dom) {
     const next = value == null ? '' : String(value);
@@ -35,7 +43,7 @@ export function setProp(dom, name, previous, value) {
     if (value == null) dom.removeAttribute('value');
   } else if (booleanProps.has(name)) {
     const enabled = value !== false && value != null;
-    if (name in dom) dom[name] = enabled;
+    if (name in dom) Reflect.set(dom, name, enabled);
     if (enabled) dom.setAttribute(attributeName(name), '');
     else dom.removeAttribute(attributeName(name));
   } else if (value === null || value === undefined || value === false) {
@@ -46,9 +54,15 @@ export function setProp(dom, name, previous, value) {
   }
 }
 
-export function createDOM(vnode, document = globalThis.document, parentNamespace) {
-  if (vnode.type === TEXT) return document.createTextNode(vnode.props.nodeValue);
-  if (vnode.type === COMMENT) return document.createComment(vnode.props.nodeValue);
+export function createDOM(
+  vnode: VNode,
+  document: Document = globalThis.document,
+  parentNamespace?: string | null,
+): Node {
+  if (vnode.type === TEXT) return document.createTextNode(String(vnode.props.nodeValue));
+  if (vnode.type === COMMENT) return document.createComment(String(vnode.props.nodeValue));
+  if (typeof vnode.type !== 'string')
+    throw new TypeError('함수형 컴포넌트는 Fiber로 평가한 뒤 DOM으로 변환해야 합니다.');
   assertUniqueKeys(vnode.children);
   const namespace =
     vnode.namespace ?? (vnode.type === 'svg' ? 'http://www.w3.org/2000/svg' : parentNamespace);

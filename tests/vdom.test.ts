@@ -1,20 +1,21 @@
+import type { VNode, PatchOperation } from '../src/core/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { environment } from './helpers.js';
-import { h, domToVNode, createDOM, diff, patch } from '../src/core/index.js';
-import { sanitizeHTML } from '../src/lab/sanitize.js';
+import { environment, query, createElementDOM } from './helpers.ts';
+import { h, domToVNode, createDOM, diff, patch } from '../src/core/index.ts';
+import { sanitizeHTML } from '../src/lab/sanitize.ts';
 
-function fixture(before) {
+function fixture<T extends HTMLElement = HTMLElement>(before: VNode) {
   const { document, container, window } = environment();
-  const dom = createDOM(before, document);
+  const dom = createElementDOM<T>(before, document);
   container.append(dom);
   return {
     document,
     container,
     window,
     dom,
-    update(next) {
-      const operations = [];
+    update(next: VNode) {
+      const operations: PatchOperation[] = [];
       const result = patch(container.firstChild, diff(before, next), container, operations);
       before = next;
       return { dom: result, operations };
@@ -36,33 +37,33 @@ test('DOM round trip preserves whitespace, comments, attributes and SVG namespac
   const { document, container } = environment();
   container.innerHTML =
     '<article title="sample"> A <b>B</b><!-- C --><svg viewBox="0 0 10 10"><circle cx="5" r="2"></circle></svg></article>';
-  const tree = domToVNode(container.firstChild);
-  const copy = createDOM(tree, document);
-  assert.equal(copy.outerHTML, container.firstChild.outerHTML);
-  assert.equal(copy.querySelector('circle').namespaceURI, 'http://www.w3.org/2000/svg');
+  const tree = domToVNode(container.firstChild!);
+  const copy = createElementDOM(tree, document);
+  assert.equal(copy.outerHTML, container.firstElementChild!.outerHTML);
+  assert.equal(query(copy, 'circle').namespaceURI, 'http://www.w3.org/2000/svg');
 });
 test('DOM conversion captures live input, textarea, checkbox and multi-select state', () => {
   const { document, container } = environment();
   container.innerHTML =
     '<div><input value="old"><input type="checkbox" checked><textarea>old</textarea><select multiple><option>A</option><option>B</option><option>C</option></select></div>';
-  container.querySelector('input').value = 'new';
-  container.querySelector('[type=checkbox]').checked = false;
-  container.querySelector('textarea').value = 'live';
+  query(container, 'input').value = 'new';
+  query<HTMLInputElement>(container, '[type=checkbox]').checked = false;
+  query(container, 'textarea').value = 'live';
   container.querySelectorAll('option')[0].selected = true;
   container.querySelectorAll('option')[2].selected = true;
-  const restored = createDOM(domToVNode(container.firstChild), document);
-  assert.equal(restored.querySelector('input').value, 'new');
-  assert.equal(restored.querySelector('[type=checkbox]').checked, false);
-  assert.equal(restored.querySelector('textarea').value, 'live');
+  const restored = createElementDOM(domToVNode(container.firstChild!), document);
+  assert.equal(query(restored, 'input').value, 'new');
+  assert.equal(query<HTMLInputElement>(restored, '[type=checkbox]').checked, false);
+  assert.equal(query(restored, 'textarea').value, 'live');
   assert.deepEqual(
-    [...restored.querySelector('select').selectedOptions].map((o) => o.value),
+    [...query(restored, 'select').selectedOptions].map((o) => o.value),
     ['A', 'C'],
   );
 });
 test('CREATE inserts a new tree; REMOVE removes it', () => {
-  const { document, container } = environment();
+  const { container } = environment();
   const tree = h('div', {}, 'hello');
-  const operations = [];
+  const operations: PatchOperation[] = [];
   const dom = patch(null, diff(null, tree), container, operations);
   assert.equal(container.textContent, 'hello');
   assert.equal(operations[0].type, 'CREATE');
@@ -72,8 +73,8 @@ test('CREATE inserts a new tree; REMOVE removes it', () => {
 });
 test('TEXT mutates only nodeValue and preserves parent and sibling identity', () => {
   const f = fixture(h('div', {}, h('p', {}, 'old'), h('input', { value: 'stay' })));
-  const p = f.dom.firstChild,
-    text = p.firstChild,
+  const p = f.dom.firstChild!,
+    text = p.firstChild!,
     input = f.dom.lastChild;
   const { operations } = f.update(h('div', {}, h('p', {}, 'new'), h('input', { value: 'stay' })));
   assert.equal(f.dom.firstChild, p);
@@ -86,7 +87,9 @@ test('TEXT mutates only nodeValue and preserves parent and sibling identity', ()
   assert.equal(text.nodeValue, 'new');
 });
 test('PROPS updates, removes and handles boolean and ARIA false', () => {
-  const f = fixture(h('button', { title: 'old', disabled: true, className: 'a' }, 'go'));
+  const f = fixture<HTMLButtonElement>(
+    h('button', { title: 'old', disabled: true, className: 'a' }, 'go'),
+  );
   f.update(h('button', { className: 'b', disabled: false, 'aria-pressed': false }, 'go'));
   assert.equal(f.dom.disabled, false);
   assert.equal(f.dom.hasAttribute('title'), false);
@@ -103,7 +106,7 @@ test('REPLACE handles incompatible tags and keys', () => {
   assert.notEqual(updated.dom, previous);
 });
 test('keyed insertion, deletion, reorder and replacement keep matching DOM objects', () => {
-  const list = (values) =>
+  const list = (values: string[]) =>
     h(
       'ul',
       {},
@@ -126,7 +129,7 @@ test('keyed insertion, deletion, reorder and replacement keep matching DOM objec
 test('seeded keyed reconciliation agrees with fresh rendering across 120 sequences', () => {
   let seed = 8123;
   const random = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
-  const list = (values) =>
+  const list = (values: string[]) =>
     h(
       'ul',
       { title: String(values.length) },
@@ -141,7 +144,7 @@ test('seeded keyed reconciliation agrees with fresh rendering across 120 sequenc
     }
     const prior = new Map([...f.dom.children].map((node) => [node.getAttribute('data-key'), node]));
     f.update(list(values));
-    assert.equal(f.dom.outerHTML, createDOM(list(values), f.document).outerHTML);
+    assert.equal(f.dom.outerHTML, createElementDOM(list(values), f.document).outerHTML);
     for (const node of f.dom.children)
       if (prior.has(node.getAttribute('data-key')))
         assert.equal(node, prior.get(node.getAttribute('data-key')));
@@ -157,7 +160,7 @@ test('event handlers are replaced and removed, never accumulated', () => {
     b = 0;
   const first = () => a++,
     second = () => b++;
-  const f = fixture(h('button', { onClick: first }, 'go'));
+  const f = fixture<HTMLButtonElement>(h('button', { onClick: first }, 'go'));
   f.dom.click();
   f.update(h('button', { onClick: second }, 'go'));
   f.dom.click();
@@ -179,7 +182,7 @@ test('style object removal and style string transitions work', () => {
 });
 test('controlled values restore edited properties and preserve input identity', () => {
   const tree = h('input', { value: 'controlled' });
-  const f = fixture(tree);
+  const f = fixture<HTMLInputElement>(tree);
   f.dom.value = 'user changed';
   f.update(tree);
   assert.equal(f.dom.value, 'controlled');
@@ -187,7 +190,7 @@ test('controlled values restore edited properties and preserve input identity', 
 });
 test('select value is applied after options exist and updates after child reconciliation', () => {
   const options = () => [h('option', { value: 'a' }, 'A'), h('option', { value: 'b' }, 'B')];
-  const f = fixture(h('select', { value: 'b' }, options()));
+  const f = fixture<HTMLSelectElement>(h('select', { value: 'b' }, options()));
   assert.equal(f.dom.value, 'b');
   f.update(h('select', { value: 'a' }, options()));
   assert.equal(f.dom.value, 'a');
@@ -208,8 +211,8 @@ test('HTML playground strips executable markup and unsafe URLs but preserves saf
   const box = document.createElement('div');
   box.append(fragment);
   assert.equal(box.querySelector('script,iframe'), null);
-  assert.equal(box.querySelector('p').hasAttribute('onclick'), false);
-  assert.equal(box.querySelector('a').hasAttribute('href'), false);
-  assert.ok(box.querySelector('circle'));
+  assert.equal(query(box, 'p').hasAttribute('onclick'), false);
+  assert.equal(query(box, 'a').hasAttribute('href'), false);
+  assert.ok(query(box, 'circle'));
   assert.ok(removed >= 4);
 });

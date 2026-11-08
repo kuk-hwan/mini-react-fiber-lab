@@ -2,21 +2,21 @@
 
 | 과제 요구사항                      | 구현                                               | 검증                                |
 | ---------------------------------- | -------------------------------------------------- | ----------------------------------- |
-| DOM → Virtual DOM                  | core/vnode.js: domToVNode                          | vdom.test.js round trip, live forms |
-| 두 트리 Diff                       | core/diff.js                                       | 5가지 변경·무변경·key 회귀          |
-| 변경 부분 Patch                    | core/patch.js                                      | DOM 객체 동일성, 120개 key 순서     |
-| 실제/테스트 영역과 버튼            | index.html, lab/lab.js                             | app.test.js, E2E, 실제 브라우저     |
-| 초기 실제 DOM을 읽고 테스트 렌더링 | setupLab 초기화                                    | app.test.js                         |
+| DOM → Virtual DOM                  | core/vnode.ts: domToVNode                          | vdom.test.ts round trip, live forms |
+| 두 트리 Diff                       | core/diff.ts                                       | 5가지 변경·무변경·key 회귀          |
+| 변경 부분 Patch                    | core/patch.ts                                      | DOM 객체 동일성, 120개 key 순서     |
+| 실제/테스트 영역과 버튼            | index.html, lab/lab.ts                             | app.test.ts, E2E, 실제 브라우저     |
+| 초기 실제 DOM을 읽고 테스트 렌더링 | setupLab 초기화                                    | app.test.ts                         |
 | 자유로운 샘플 수정                 | HTML textarea, contenteditable                     | 직접 DOM mutation·폼 이력           |
-| 상태 이력, undo/redo               | lab/history.js                                     | 불변성·최대 개수·분기·무변경        |
-| FunctionComponent 클래스           | core/fiber.js                                      | mount, update, unmount, whenIdle    |
-| hooks 배열                         | core/hooks.js                                      | 슬롯 보존·lazy init·stable setter   |
+| 상태 이력, undo/redo               | lab/history.ts                                     | 불변성·최대 개수·분기·무변경        |
+| FunctionComponent 클래스           | core/fiber.ts                                      | mount, update, unmount, whenIdle    |
+| hooks 배열                         | core/hooks.ts                                      | 슬롯 보존·lazy init·stable setter   |
 | 루트만 Hook / 상태 관리            | Board, withHooks owner                             | 자식 Hook 거부 테스트               |
 | 순수 함수형 자식                   | TaskRow, ProgressCard                              | props 변경·key 이동                 |
 | useState                           | 상태 큐·updater·Object.is                          | 상태 지속·배칭·동시 도착            |
 | useEffect                          | deps·setup·cleanup                                 | commit 이후·unmount·후속 갱신       |
 | useMemo                            | deps 캐시                                          | 불필요한 재계산 방지                |
-| Phase 1·2 공통 VDOM/Diff/Patch     | core/index.js 공유 엔진                            | 양 Phase 통합 테스트                |
+| Phase 1·2 공통 VDOM/Diff/Patch     | core/index.ts 공유 엔진                            | 양 Phase 통합 테스트                |
 | 클릭·입력에 따른 변화              | HTML lab, task board                               | 브라우저·통합·E2E                   |
 | Vanilla / 외부 프레임워크 금지     | 런타임 npm 의존성 없음                             | package.json, 정적 build            |
 | Fiber 아키텍처                     | child/sibling/return/alternate, WIP, yield, commit | commit 전 DOM 불변·작업 재개        |
@@ -26,7 +26,7 @@
 ## 테스트 계층
 
 - **단위·통합·회귀**: `npm test`로 41개 테스트. DOM 환경은 jsdom이며 layout/paint나 브라우저 focus 동작을 대신 검증하지 않습니다.
-- **브라우저 E2E**: `tests/e2e/app.spec.js`에 3개 시나리오 × desktop/mobile Chromium. GitHub Actions가 실행합니다.
+- **브라우저 E2E**: `tests/e2e/app.spec.ts`에 3개 시나리오 × desktop/mobile Chromium. GitHub Actions가 실행합니다.
 - **직접 브라우저 검증**: 제목 TEXT Patch, undo/redo, key 재정렬, 작업 추가/검색/완료/삭제/재접속 유지, +3 batching, 모바일 가로 넘침, 키보드 Patch와 console 오류를 확인했습니다.
 
 ## 해석상의 경계

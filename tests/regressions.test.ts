@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { environment } from './helpers.js';
-import { h, diff, createDOM, FunctionComponent, useState } from '../src/core/index.js';
+import { environment, createElementDOM } from './helpers.ts';
+import type { Fiber, StateSetter } from '../src/core/index.ts';
+import { h, diff, FunctionComponent, useState } from '../src/core/index.ts';
 
 test('invalid key in new subtree fails during diff, before parent changes', () => {
   const before = h('main', { title: 'before' }, h('p', {}, 'original'));
@@ -12,14 +13,14 @@ test('invalid key in new subtree fails during diff, before parent changes', () =
     h('ul', {}, h('li', { key: 'x' }), h('li', { key: 'x' })),
   );
   const { document, container } = environment();
-  const dom = createDOM(before, document);
+  const dom = createElementDOM(before, document);
   container.append(dom);
   assert.throws(() => diff(before, next), /중복 key/);
   assert.equal(dom.title, 'before');
   assert.equal(dom.textContent, 'original');
 });
 test('stale setters from a previous mount do not schedule a new generation', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { container } = environment();
   const instance = new FunctionComponent(() => {
     const [n, s] = useState(0);
@@ -39,7 +40,7 @@ test('stale setters from a previous mount do not schedule a new generation', () 
   instance.unmount();
 });
 test('Fiber only retains one previous generation after deletions', () => {
-  let set;
+  let set!: StateSetter<number>;
   const { container } = environment();
   const instance = new FunctionComponent(() => {
     const [n, s] = useState(3);
@@ -55,9 +56,9 @@ test('Fiber only retains one previous generation after deletions', () => {
   instance.flushSync();
   set(1);
   instance.flushSync();
-  const stack = [instance.current.alternate];
+  const stack: Fiber[] = [instance.current!.alternate!];
   while (stack.length) {
-    const node = stack.pop();
+    const node = stack.pop()!;
     assert.equal(node.alternate, null);
     if (node.child) stack.push(node.child);
     if (node.sibling) stack.push(node.sibling);

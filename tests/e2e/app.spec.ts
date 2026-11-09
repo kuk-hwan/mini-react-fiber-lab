@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('DOM editing, history navigation, no-op and keyed reordering', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#lab');
   const original = await page.locator('#actual h2').elementHandle();
   await page.getByLabel('실험 예제', { exact: true }).selectOption('text');
   await page.getByRole('button', { name: 'Patch 적용' }).click();
@@ -49,7 +49,7 @@ test('task board events, memo reuse, batching and persistence', async ({ page })
 test('responsive layout, keyboard patch and no application errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/#lab');
   await page.getByLabel('테스트 HTML 소스', { exact: true }).fill('<p>Keyboard patch</p>');
   await page.getByLabel('테스트 HTML 소스', { exact: true }).press('Control+Enter');
   await expect(page.locator('#actual')).toHaveText('Keyboard patch');
@@ -58,5 +58,50 @@ test('responsive layout, keyboard patch and no application errors', async ({ pag
   );
   await page.goto('/#guide');
   await expect(page.getByRole('heading', { name: '화면 뒤에서 일어나는 일.' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('idol quiz updates a question in place and recommends a group and official track', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await page.getByRole('button', { name: '취향 테스트 시작' }).click();
+  const progress = page.getByRole('progressbar', { name: '질문 진행률' });
+  await expect(progress).toHaveJSProperty('value', 1);
+  const card = await page.locator('.sm-question-card').elementHandle();
+  const choices = page.locator('.sm-option');
+  await choices.first().click();
+  await expect(progress).toHaveJSProperty('value', 2);
+  expect(await card!.evaluate((node) => node === document.querySelector('.sm-question-card'))).toBe(
+    true,
+  );
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+  await page.getByRole('button', { name: '이전 질문' }).click();
+  await expect(choices.first()).toHaveAttribute('data-selected', 'true');
+
+  for (let step = 1; step <= 6; step++) {
+    await expect(progress).toHaveJSProperty('value', step);
+    await choices.first().click();
+  }
+  await expect(page.getByRole('heading', { name: 'SEVENTEEN', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '추천 이유', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /_WORLD/ })).toHaveAttribute(
+    'href',
+    'https://www.youtube.com/watch?v=VCDWg0ljbFQ',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  await page.getByRole('button', { name: '마지막 답변 수정' }).click();
+  await expect(progress).toHaveJSProperty('value', 6);
+  await expect(choices.first()).toHaveAttribute('data-selected', 'true');
+  await choices.nth(2).click();
+  await page.getByRole('button', { name: '다시 테스트하기' }).click();
+  await page.getByRole('button', { name: '취향 테스트 시작' }).click();
+  await expect(choices.first()).toHaveAttribute('data-selected', 'false');
+
+  await page.getByRole('link', { name: 'Fiber Lab', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '작은 변화, 정확한 업데이트.' })).toBeVisible();
   expect(errors).toEqual([]);
 });

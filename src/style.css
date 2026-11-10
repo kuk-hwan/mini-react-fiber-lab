@@ -849,16 +849,10 @@ select {
   display: flex;
   gap: 10px;
   align-items: center;
-  width: 100%;
-  padding: 8px 6px;
+  padding: 7px 0;
   border-bottom: 1px solid #f0f2eb;
-  text-align: left;
   font-size: 10px;
   color: #8c977f;
-}
-.log-row[aria-pressed='true'] {
-  background: #eee8f6;
-  color: #48365d;
 }
 .log-row code {
   font-size: 9px;
@@ -897,57 +891,6 @@ select {
   color: #98a389;
   font-size: 11px;
   padding: 20px;
-}
-.log-selection {
-  border-top: 1px solid var(--line);
-  padding: 14px 18px 18px;
-}
-.log-selection-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-}
-.log-selection-head h3 {
-  margin: 0;
-  color: #4b3563;
-  font-size: 14px;
-}
-.log-selection p {
-  margin: 4px 0 10px;
-  color: #5d6556;
-  font-size: 12px;
-}
-.log-comparison {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.log-comparison > div {
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: #f3f0f7;
-}
-.log-comparison > div + div {
-  background: #eff4e9;
-}
-.log-comparison h4 {
-  margin: 0 0 4px;
-  color: #4d5947;
-  font-size: 11px;
-}
-.log-comparison pre {
-  max-height: 9em;
-  overflow: auto;
-  margin: 0;
-  color: #30382d;
-  font:
-    12px/1.5 'IBM Plex Mono',
-    monospace;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 .page-footer {
   display: flex;
@@ -1229,56 +1172,6 @@ select {
   font-size: 11px;
   padding: 12px 17px;
   white-space: nowrap;
-}
-.batch-trace {
-  margin-top: 12px;
-  padding: 16px clamp(13px, 2.5vw, 27px);
-}
-.batch-trace-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 14px;
-}
-.batch-trace-heading h2 {
-  margin: 4px 0 0;
-  color: #4a395a;
-  font-size: 16px;
-}
-.batch-trace-heading output {
-  padding: 6px 9px;
-  border-radius: 6px;
-  background: #edf3e4;
-  color: #395130;
-  font-weight: 700;
-}
-.batch-trace ol {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 12px 0 9px;
-  padding: 0;
-  list-style: none;
-}
-.batch-trace li {
-  display: grid;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: #f3f0f7;
-  color: #4a395a;
-  overflow-wrap: anywhere;
-}
-.batch-trace li span,
-.batch-trace > p {
-  color: #5d6556;
-  font-size: 11px;
-}
-.batch-trace li strong {
-  font:
-    600 14px 'IBM Plex Mono',
-    monospace;
 }
 .fiber-inspector {
   margin: 23px 0 35px;

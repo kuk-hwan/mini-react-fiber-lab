@@ -6,9 +6,7 @@ setupLab();
 let board: ReturnType<typeof setupBoard> | undefined;
 const labels = { lab: 'DOM 실험실', hooks: 'Hooks 작업 보드', guide: '엔진 들여다보기' };
 function navigate(requestedPage: string): void {
-  const page = Object.hasOwn(labels, requestedPage)
-    ? (requestedPage as keyof typeof labels)
-    : 'lab';
+  const page = requestedPage in labels ? (requestedPage as keyof typeof labels) : 'lab';
   for (const section of document.querySelectorAll<HTMLElement>('main > .page'))
     section.hidden = section.id !== `page-${page}`;
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-page]')) {

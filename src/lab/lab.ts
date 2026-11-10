@@ -1,9 +1,8 @@
 import { domToVNode, createDOM, diff, patch } from '../core/index.ts';
 import { StateHistory } from './history.ts';
-import { setupPatchLog } from './patch-log.ts';
 import { sanitizeHTML } from './sanitize.ts';
 import { mustQuery, inputValue, errorMessage } from '../shared/dom.ts';
-import type { PatchInspection, PatchOperation, VNode } from '../core/index.ts';
+import type { PatchOperation, VNode } from '../core/index.ts';
 
 const base = `<article class="demo-card">
   <span class="demo-eyebrow">TODAY'S SMALL WINS</span>
@@ -22,7 +21,6 @@ export function setupLab() {
   const actual = $('#actual'),
     test = $('#test'),
     source = $<HTMLTextAreaElement>('#source');
-  const patchLog = setupPatchLog(actual);
   const wrap = document.createElement('div');
   wrap.className = 'sample-document';
   wrap.append(sanitizeHTML(base).fragment);
@@ -130,13 +128,35 @@ export function setupLab() {
     );
     $('#tree-view').textContent = JSON.stringify(current, null, 2);
   }
+  function renderLog(operations: PatchOperation[]): void {
+    $('#log-count').textContent = `${operations.length} changes`;
+    const nodes: HTMLElement[] = operations.map((operation) => {
+      const row = document.createElement('div');
+      row.className = 'log-row';
+      const badge = document.createElement('b');
+      badge.className = `op op-${operation.type.toLowerCase()}`;
+      badge.textContent = operation.type;
+      const path = document.createElement('code');
+      path.textContent = operation.path;
+      const detail = document.createElement('span');
+      detail.textContent = operation.detail;
+      row.append(badge, path, detail);
+      return row;
+    });
+    if (!nodes.length) {
+      const empty = document.createElement('p');
+      empty.className = 'log-noop';
+      empty.textContent = '변경 없음 — DOM을 그대로 유지했습니다.';
+      nodes.push(empty);
+    }
+    $('#change-log').replaceChildren(...nodes);
+  }
   function apply(next: VNode): PatchOperation[] {
     const before = [...actual.querySelectorAll('*')];
     const start = performance.now();
     const plan = diff(current, next);
     const operations: PatchOperation[] = [];
-    const changes: PatchInspection[] = [];
-    patch(actual.firstChild, plan, actual, operations, (change) => changes.push(change));
+    patch(actual.firstChild, plan, actual, operations);
     const elapsed = performance.now() - start;
     current = next;
     $('#metric-changes').replaceChildren(String(operations.length), small('operations'));
@@ -148,7 +168,7 @@ export function setupLab() {
     $('#actual-note').textContent = operations.length
       ? `${operations.length}개 변경을 실제 DOM에 반영했습니다.`
       : '동일한 트리입니다. DOM을 유지했습니다.';
-    patchLog.render(changes);
+    renderLog(operations);
     return operations;
   }
   function applyPatch() {
@@ -213,7 +233,6 @@ export function setupLab() {
   $('#log-tab').addEventListener('click', () => inspector(false));
   $('#tree-tab').addEventListener('click', () => inspector(true));
   function inspector(tree: boolean): void {
-    if (tree) patchLog.clearSelection();
     $('#change-log').hidden = tree;
     $('#tree-view').hidden = !tree;
     $('#log-tab').classList.toggle('active', !tree);

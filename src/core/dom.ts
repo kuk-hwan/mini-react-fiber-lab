@@ -19,14 +19,6 @@ const aliases: Record<string, string> = {
 };
 const attributeName = (name: string): string => aliases[name] ?? name;
 
-export function readDOMProp(dom: Element, name: string, value: unknown): string | null {
-  if (isEvent(name)) return typeof value === 'function' ? '이벤트 핸들러 연결' : null;
-  if ((name === 'value' || booleanProps.has(name)) && name in dom) {
-    return String(Reflect.get(dom, name));
-  }
-  return dom.getAttribute(attributeName(name));
-}
-
 export function setProp(dom: Element, name: string, previous: unknown, value: unknown): void {
   if (name === 'children' || name === 'key') return;
   if (isEvent(name)) {

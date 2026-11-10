@@ -207,28 +207,6 @@
                 <p>아직 변경된 내용이 없습니다.<small>첫 번째 Patch를 기다리고 있어요.</small></p>
               </div>
             </div>
-            <section
-              id="log-selection"
-              class="log-selection"
-              aria-labelledby="log-selection-title"
-              hidden
-            >
-              <div class="log-selection-head">
-                <h3 id="log-selection-title" aria-live="polite"></h3>
-                <button id="log-jump" class="text-button" type="button">강조된 요소 보기 ↑</button>
-              </div>
-              <p id="log-selection-note"></p>
-              <div class="log-comparison">
-                <div>
-                  <h4>변경 전</h4>
-                  <pre id="log-before"></pre>
-                </div>
-                <div>
-                  <h4>변경 후</h4>
-                  <pre id="log-after"></pre>
-                </div>
-              </div>
-            </section>
             <pre id="tree-view" class="tree-view" hidden></pre>
           </section>
         </div>
@@ -250,22 +228,6 @@
           ><span>Automatic batching</span><span>Keyed reconciliation</span>
         </div>
         <div id="hooks-app"></div>
-        <section
-          id="batch-trace"
-          class="batch-trace panel"
-          aria-labelledby="batch-trace-title"
-          hidden
-        >
-          <div class="batch-trace-heading">
-            <div>
-              <span class="section-label">BATCHING TRACE</span>
-              <h2 id="batch-trace-title">최근 클릭에서 처리한 요청</h2>
-            </div>
-            <output id="batch-trace-commit" aria-live="polite"></output>
-          </div>
-          <ol id="batch-trace-steps" aria-label="상태 변경 처리 순서"></ol>
-          <p>중간 값은 상태 계산에 쓰이고, 화면에는 마지막 값이 반영돼요.</p>
-        </section>
         <section class="panel fiber-inspector">
           <div class="panel-heading">
             <div>

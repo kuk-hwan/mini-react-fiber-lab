@@ -13,6 +13,10 @@ interface TaskRowProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }
+interface BatchStep {
+  before: number;
+  after: number;
+}
 type Filter = 'all' | 'active' | 'done';
 const filters: [Filter, string][] = [
   ['all', '전체'],
@@ -130,6 +134,31 @@ function ProgressCard({ completed, total }: { completed: number; total: number }
 
 export function setupBoard() {
   const diagnostics = { memoRuns: 0, effectRuns: 0, cleanupRuns: 0, storage: '저장 준비' };
+  const batchTrace = mustQuery('#batch-trace');
+  const batchSteps = mustQuery('#batch-trace-steps');
+  const batchCommit = mustQuery('#batch-trace-commit');
+  const batchSize = 3;
+  let pendingBatch: BatchStep[] | undefined;
+  let previousCommit = 0;
+
+  function renderBatchTrace(commits: number): void {
+    if (pendingBatch?.length !== batchSize) return;
+    batchSteps.replaceChildren(
+      ...pendingBatch.map(({ before, after }, index) => {
+        const item = document.createElement('li');
+        const label = document.createElement('span');
+        const values = document.createElement('strong');
+        label.textContent = `요청 ${index + 1} · +1`;
+        values.textContent = `${before} → ${after}`;
+        item.append(label, values);
+        return item;
+      }),
+    );
+    batchCommit.textContent = `커밋 ${previousCommit} → ${commits} (+${commits - previousCommit}회)`;
+    batchTrace.hidden = false;
+    pendingBatch = undefined;
+  }
+
   function Board() {
     const [tasks, setTasks] = useState(loadTasks);
     const [draft, setDraft] = useState('');
@@ -290,7 +319,7 @@ export function setupBoard() {
           h(
             'p',
             {},
-            '한 클릭에서 함수형 setState를 3번 호출합니다. 아래 commit 수가 1만 증가하는지 확인하세요.',
+            '한 클릭에서 상태 변경을 3번 요청해요. 아래에서 처리 순서와 커밋을 확인해 보세요.',
           ),
         ),
         h(
@@ -302,9 +331,16 @@ export function setupBoard() {
             {
               className: 'dark-button',
               onClick: () => {
-                setBatchCount((n) => n + 1);
-                setBatchCount((n) => n + 1);
-                setBatchCount((n) => n + 1);
+                const steps: BatchStep[] = [];
+                pendingBatch = steps;
+                for (let index = 0; index < batchSize; index++) {
+                  setBatchCount((before) => {
+                    const after = before + 1;
+                    // Capture the values the updater actually processes. Display them on commit.
+                    steps[index] = { before, after };
+                    return after;
+                  });
+                }
               },
             },
             '+3 한 번에',
@@ -318,6 +354,8 @@ export function setupBoard() {
     {},
     {
       onCommit(metrics) {
+        renderBatchTrace(metrics.commits);
+        previousCommit = metrics.commits;
         const stats = mustQuery('#fiber-stats');
         const items: [string, string | number][] = [
           ['COMMITS', metrics.commits],

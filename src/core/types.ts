@@ -53,6 +53,11 @@ export interface PatchOperation {
   path: string;
   detail: string;
 }
+export interface PatchInspection extends PatchOperation {
+  target: Node;
+  before: string | null;
+  after: string | null;
+}
 export type StateAction<T> = T | ((previous: T) => T);
 export type StateSetter<T> = (action: StateAction<T>) => void;
 export type Dependencies = readonly unknown[] | undefined;

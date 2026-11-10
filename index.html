@@ -69,6 +69,40 @@
           <a href="#lab" class="sm-lab-link">Fiber Lab <span aria-hidden="true">↗</span></a>
         </header>
         <div id="quiz-app"></div>
+        <details id="quiz-answer-trace" class="sm-trace" hidden>
+          <summary class="sm-trace-toggle">
+            <span class="sm-trace-icon" aria-hidden="true">↳</span>
+            <span>이 답변이 화면을 어떻게 바꿨나요?</span>
+          </summary>
+          <div class="sm-trace-flow">
+            <section class="sm-trace-phase">
+              <p class="sm-kicker">01 · PHASE 2 / STATE</p>
+              <h2>답변과 상태가 바뀌었어요</h2>
+              <p id="quiz-trace-choice" class="sm-trace-choice"></p>
+              <p id="quiz-trace-step" class="sm-trace-step"></p>
+              <dl class="sm-trace-state">
+                <div>
+                  <dt>이전</dt>
+                  <dd><code id="quiz-trace-before"></code></dd>
+                </div>
+                <div>
+                  <dt>이후</dt>
+                  <dd><code id="quiz-trace-after"></code></dd>
+                </div>
+              </dl>
+            </section>
+            <section class="sm-trace-phase">
+              <p class="sm-kicker">02 · PHASE 1 / DIFF &amp; PATCH</p>
+              <h2>바뀐 부분을 화면에 반영했어요</h2>
+              <p id="quiz-trace-count" class="sm-trace-step"></p>
+              <ul id="quiz-trace-highlights" class="sm-trace-operations"></ul>
+              <details id="quiz-trace-log">
+                <summary>전체 Patch 기록</summary>
+                <ol id="quiz-trace-operations" class="sm-trace-operations"></ol>
+              </details>
+            </section>
+          </div>
+        </details>
         <footer class="sm-footer">
           <span>STAGE MATCH / K-POP DISCOVERY</span>
           <a href="#guide">이 화면을 움직이는 엔진 <span aria-hidden="true">↗</span></a>

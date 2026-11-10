@@ -72,13 +72,33 @@ test('idol quiz updates a question in place and recommends a group and official 
   await expect(progress).toHaveJSProperty('value', 1);
   const card = await page.locator('.sm-question-card').elementHandle();
   const choices = page.locator('.sm-option');
+  const trace = page.locator('#quiz-answer-trace');
+  const traceToggle = trace.getByText('이 답변이 화면을 어떻게 바꿨나요?', { exact: true });
+  await expect(trace).toBeHidden();
   await choices.first().click();
   await expect(progress).toHaveJSProperty('value', 2);
   expect(await card!.evaluate((node) => node === document.querySelector('.sm-question-card'))).toBe(
     true,
   );
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+  await expect(traceToggle).toBeVisible();
+  await expect(trace.locator('#quiz-trace-before')).toBeHidden();
+  await traceToggle.click();
+  await expect(trace.locator('#quiz-trace-choice')).toContainText('1번 답변 · A');
+  await expect(trace.locator('#quiz-trace-before')).toHaveText('{"step":0,"answers":[]}');
+  await expect(trace.locator('#quiz-trace-after')).toHaveText('{"step":1,"answers":[0]}');
+  const newTitle = await page.getByRole('heading', { level: 1 }).textContent();
+  await expect(trace.locator('#quiz-trace-highlights')).toContainText(
+    `TEXT화면 제목 · ${newTitle}`,
+  );
+  await expect(trace.locator('#quiz-trace-highlights')).toContainText('PROPS진행률 · 2 / 6');
+  await trace.getByText('전체 Patch 기록', { exact: true }).click();
+  await expect(
+    trace.locator('#quiz-trace-operations li').filter({ hasText: newTitle! }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: '이전 질문' }).click();
+  await expect(trace).toBeHidden();
   await expect(choices.first()).toHaveAttribute('data-selected', 'true');
 
   for (let step = 1; step <= 6; step++) {
@@ -93,6 +113,10 @@ test('idol quiz updates a question in place and recommends a group and official 
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
+  await traceToggle.click();
+  await expect(trace.locator('#quiz-trace-step')).toHaveText('6번 문항 → 추천 결과');
+  await expect(trace.locator('#quiz-trace-after')).toHaveText('{"step":6,"answers":[0,0,0,0,0,0]}');
+  await expect(trace.locator('#quiz-trace-highlights')).toContainText('결과 화면');
   await page.getByRole('button', { name: '마지막 답변 수정' }).click();
   await expect(progress).toHaveJSProperty('value', 6);
   await expect(choices.first()).toHaveAttribute('data-selected', 'true');

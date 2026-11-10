@@ -1,7 +1,7 @@
 import { FunctionComponent, h, useEffect, useMemo, useState } from '../core/index.ts';
 import { groups, questions, recommend } from './catalog.ts';
+import { setupAnswerTrace, type Session } from './answer-trace.ts';
 
-type Session = { step: number; answers: readonly number[] };
 type Match = NonNullable<ReturnType<typeof recommend>>;
 const total = questions.length;
 
@@ -229,7 +229,7 @@ function Result({
   );
 }
 
-function StageMatch() {
+function StageMatch({ recordSession }: { recordSession: (session: Session | null) => void }) {
   const [session, setSession] = useState<Session | null>(null);
   const step = session?.step;
   const answers = session?.answers;
@@ -240,6 +240,9 @@ function StageMatch() {
   useEffect(() => {
     document.getElementById('quiz-stage-title')?.focus({ preventScroll: true });
   }, [step]);
+  useEffect(() => {
+    recordSession(session);
+  }, [session, recordSession]);
 
   function answer(choice: number) {
     setSession((current) => {
@@ -263,6 +266,7 @@ function StageMatch() {
   return h(Question, { session, onAnswer: answer, onBack: back });
 }
 
-export function setupQuiz(root: HTMLElement) {
-  return new FunctionComponent(StageMatch).mount(root);
+export function setupQuiz(root: HTMLElement, panel: HTMLDetailsElement) {
+  const { recordSession, onCommit } = setupAnswerTrace(panel);
+  return new FunctionComponent(StageMatch, { recordSession }, { onCommit }).mount(root);
 }

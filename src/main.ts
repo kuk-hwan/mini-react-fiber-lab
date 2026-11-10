@@ -26,7 +26,8 @@ function navigate(requestedPage: string): void {
     else button.removeAttribute('aria-current');
   }
   mustQuery('#page-name').textContent = labels[page];
-  if (page === 'quiz' && !quiz) quiz = setupQuiz(mustQuery('#quiz-app'));
+  if (page === 'quiz' && !quiz)
+    quiz = setupQuiz(mustQuery('#quiz-app'), mustQuery<HTMLDetailsElement>('#quiz-answer-trace'));
   if (page === 'lab' && !labReady) {
     setupLab();
     labReady = true;

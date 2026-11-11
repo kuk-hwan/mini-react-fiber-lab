@@ -1,6 +1,7 @@
 import { h, FunctionComponent, useState, useMemo, useEffect } from '../core/index.ts';
 import type { Fiber, VNode } from '../core/index.ts';
 import { mustQuery, inputValue } from '../shared/dom.ts';
+import { setupExecution } from './execution.ts';
 
 interface Task {
   id: string;
@@ -10,8 +11,22 @@ interface Task {
 }
 interface TaskRowProps {
   task: Task;
+  recent: boolean;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+}
+interface BoardRender {
+  tasks: Task[];
+  draft: string;
+  feedback: string;
+  visible: number;
+  completed: number;
+  batchResult: string;
+}
+interface BoardCommit extends BoardRender {
+  memoRuns: number;
+  effectRuns: number;
+  commits: number;
 }
 type Filter = 'all' | 'active' | 'done';
 const filters: [Filter, string][] = [
@@ -60,10 +75,15 @@ function loadTasks(): Task[] {
 }
 
 // Children are pure functions of props. All hooks below belong to Board only.
-function TaskRow({ task, onToggle, onDelete }: TaskRowProps): VNode {
+function TaskRow({ task, recent, onToggle, onDelete }: TaskRowProps): VNode {
   return h(
     'li',
-    { className: `task-row ${task.done ? 'task-done' : ''}`, 'data-task-id': task.id },
+    {
+      className: ['task-row', task.done && 'task-done', recent && 'task-recent']
+        .filter(Boolean)
+        .join(' '),
+      'data-task-id': task.id,
+    },
     h(
       'button',
       {
@@ -85,6 +105,7 @@ function TaskRow({ task, onToggle, onDelete }: TaskRowProps): VNode {
       { className: `task-status ${task.done ? 'done' : ''}` },
       task.done ? '완료' : '진행 중',
     ),
+    h('span', { className: 'task-new', hidden: !recent }, '새 작업'),
     h(
       'button',
       {
@@ -102,8 +123,7 @@ function ProgressCard({ completed, total }: { completed: number; total: number }
   return h(
     'aside',
     { className: 'progress-card' },
-    h('span', { className: 'section-label' }, 'YOUR MOMENTUM'),
-    h('h2', {}, '작은 성취가 쌓이는 중'),
+    h('h3', {}, `완료 ${completed} / ${total}`),
     h('div', { className: 'progress-number' }, String(percent), h('span', {}, '%')),
     h(
       'div',
@@ -117,20 +137,16 @@ function ProgressCard({ completed, total }: { completed: number; total: number }
       },
       h('div', { style: { width: `${percent}%` } }),
     ),
-    h('p', {}, `${total}개의 작업 중 ${completed}개를 완료했어요.`),
-    h('div', { className: 'progress-divider' }),
-    h('span', { className: 'section-label' }, 'useMemo'),
-    h(
-      'p',
-      { className: 'progress-explain' },
-      '완료 수와 검색 결과는 의존성이 바뀔 때만 다시 계산합니다. 입력창에 새 작업을 적을 때는 계산 결과를 재사용합니다.',
-    ),
   );
 }
 
 export function setupBoard() {
   const diagnostics = { memoRuns: 0, effectRuns: 0, cleanupRuns: 0, storage: '저장 준비' };
-  function Board() {
+  const showExecution = setupExecution();
+  let lastAddedId: string | undefined;
+  let rendered: BoardRender;
+  let previousCommit: BoardCommit | undefined;
+  function Board(): VNode {
     const [tasks, setTasks] = useState(loadTasks);
     const [draft, setDraft] = useState('');
     const [query, setQuery] = useState('');
@@ -163,9 +179,19 @@ export function setupBoard() {
         document.title = previousTitle;
       };
     }, [tasks]);
+    const counter = instance.draftHooks.find(
+      (hook) => hook.kind === 'state' && hook.setState === setBatchCount,
+    );
+    const requests = counter?.kind === 'state' ? counter.consumed : 0;
+    // The counter and the result are patched together from this render.
+    const batchResult = requests
+      ? `상태 변경 요청 ${requests}개 · 커밋 1회`
+      : (previousCommit?.batchResult ?? '');
     const addTask = (event: SubmitEvent): void => {
       event.preventDefault();
-      if (!draft.trim()) {
+      const form = event.currentTarget as HTMLFormElement;
+      const title = mustQuery<HTMLInputElement>('#new-task', form).value.trim();
+      if (!title) {
         setFeedback('작업 이름을 입력해 주세요.');
         return;
       }
@@ -173,12 +199,19 @@ export function setupBoard() {
         setFeedback('최대 500개까지 저장할 수 있습니다.');
         return;
       }
-      setTasks((previous) => [
-        ...previous,
-        { id: crypto.randomUUID(), title: draft.trim(), category: 'MY TASK', done: false },
-      ]);
+      const task = { id: crypto.randomUUID(), title, category: 'MY TASK', done: false };
+      lastAddedId = task.id;
+      setTasks((previous) => (previous.length < 500 ? [...previous, task] : previous));
       setDraft('');
       setFeedback('새 작업을 추가했습니다.');
+    };
+    rendered = {
+      tasks,
+      draft,
+      feedback,
+      visible: derived.visible.length,
+      completed: derived.completed,
+      batchResult,
     };
     return h(
       'div',
@@ -192,13 +225,8 @@ export function setupBoard() {
           h(
             'div',
             { className: 'board-heading' },
-            h(
-              'div',
-              {},
-              h('span', { className: 'section-label' }, 'MY LEARNING SPRINT'),
-              h('h2', {}, '오늘의 작업 보드'),
-            ),
-            h('span', { className: 'count-badge' }, `${tasks.length} tasks`),
+            h('div', {}, h('h2', {}, 'Hooks 작업 보드')),
+            h('span', { className: 'count-badge' }, `작업 ${tasks.length}개`),
           ),
           h(
             'form',
@@ -206,7 +234,7 @@ export function setupBoard() {
             h('input', {
               id: 'new-task',
               'aria-label': '새 작업',
-              placeholder: '다음으로 만들고 싶은 것은?',
+              placeholder: '새 작업 입력',
               value: draft,
               maxLength: 120,
               onInput: (event) => setDraft(inputValue(event)),
@@ -248,6 +276,7 @@ export function setupBoard() {
               h(TaskRow, {
                 key: task.id,
                 task,
+                recent: task.id === lastAddedId,
                 onToggle: (id) =>
                   setTasks((previous) =>
                     previous.map((item) => (item.id === id ? { ...item, done: !item.done } : item)),
@@ -285,12 +314,11 @@ export function setupBoard() {
         h(
           'div',
           {},
-          h('span', { className: 'section-label' }, 'BATCHING EXPERIMENT'),
-          h('h3', {}, '세 번 바꿔도, 한 번의 렌더링'),
+          h('h3', {}, '배칭 예제'),
           h(
             'p',
-            {},
-            '한 클릭에서 함수형 setState를 3번 호출합니다. 아래 commit 수가 1만 증가하는지 확인하세요.',
+            { id: 'batch-result', role: 'status', className: batchResult ? 'batch-result' : '' },
+            batchResult || '+1 요청을 모아서 커밋 횟수와 비교해 보세요.',
           ),
         ),
         h(
@@ -318,6 +346,21 @@ export function setupBoard() {
     {},
     {
       onCommit(metrics) {
+        const current: BoardCommit = {
+          ...rendered,
+          memoRuns: diagnostics.memoRuns,
+          effectRuns: diagnostics.effectRuns,
+          commits: metrics.commits,
+        };
+        const previous = previousCommit;
+        previousCommit = current;
+        const oldIds =
+          previous && previous.tasks !== current.tasks
+            ? new Set(previous.tasks.map((task) => task.id))
+            : null;
+        const added = oldIds ? current.tasks.filter((task) => !oldIds.has(task.id)) : [];
+        const lastAdded = added.at(-1);
+        let addedRow: Fiber | undefined;
         const stats = mustQuery('#fiber-stats');
         const items: [string, string | number][] = [
           ['COMMITS', metrics.commits],
@@ -343,6 +386,7 @@ export function setupBoard() {
         const stack: [Fiber, number][] = [[metrics.root, 0]];
         while (stack.length) {
           const [fiber, depth] = stack.pop()!;
+          if (lastAdded && fiber.type === TaskRow && fiber.key === lastAdded.id) addedRow = fiber;
           lines.push(
             `${'  '.repeat(depth)}${typeof fiber.type === 'function' ? fiber.type.name : fiber.type}${fiber.key == null ? '' : ` [key=${fiber.key}]`}${fiber.alternate ? ' ↔ alternate' : ' + new'}`,
           );
@@ -350,6 +394,50 @@ export function setupBoard() {
           if (fiber.child) stack.push([fiber.child, depth + 1]);
         }
         mustQuery('#fiber-tree').textContent = lines.join('\n');
+        if (!previous || !lastAdded) return;
+        const commitSummary = `COMMITS ${previous.commits} → ${current.commits}`;
+        const memo = current.memoRuns - previous.memoRuns;
+        const effects = current.effectRuns - previous.effectRuns;
+        const rowTask = addedRow?.vnode.props.task;
+        const row = addedRow?.dom?.isConnected && isTask(rowTask) ? rowTask : undefined;
+        const draftChange = current.draft === '' ? '입력칸 비움' : '입력값 유지';
+        showExecution({
+          summary: `“${lastAdded.title}” · ${commitSummary}`,
+          steps: [
+            {
+              phase: 'render',
+              title: 'useState',
+              detail: `작업 ${previous.tasks.length} → ${current.tasks.length}개 · ${draftChange} · ${current.feedback}`,
+            },
+            {
+              phase: 'render',
+              title: 'useMemo',
+              detail: `${memo ? '표시할 목록과 완료 수를 다시 계산' : '이전 계산 결과를 재사용'} · 표시 ${current.visible}개 · 완료 ${current.completed}개`,
+            },
+            {
+              phase: 'render',
+              title: 'Props',
+              detail: row
+                ? `TaskRow에 “${row.title}” 전달 · ${row.done ? '완료' : '미완료'}`
+                : '검색 또는 필터 조건에 맞지 않아 새 작업을 TaskRow에 전달하지 않았어요.',
+            },
+            {
+              phase: 'patch',
+              title: 'Diff · Patch',
+              detail: row
+                ? '새 작업 행을 실제 DOM에 추가했어요.'
+                : '현재 목록에는 새 행을 추가하지 않았어요.',
+              operations: metrics.operations,
+            },
+            {
+              phase: 'effect',
+              title: 'useEffect',
+              detail: effects
+                ? `DOM 반영 후 실행 ${effects}회 · ${diagnostics.storage} · 탭 제목 갱신`
+                : '의존성이 유지되어 다시 실행하지 않았어요.',
+            },
+          ],
+        });
       },
       onError(error) {
         const box = mustQuery('#hooks-error');

@@ -1,10 +1,12 @@
 # Fiber Lab · Mini React
 
-**Virtual DOM → Diff → Patch → Fiber → Hooks를 직접 구현한 Vanilla TypeScript 프로젝트입니다.**
+**카드 짝 맞추기를 하면서 Mini React가 상태를 실제 DOM에 반영하는 과정을 확인할 수 있는 Vanilla TypeScript 프로젝트입니다.**
 
-두 Phase가 같은 렌더링 엔진을 사용합니다. 엔진·데모·테스트·설정 코드를 TypeScript로 작성하고 `strict` 타입 검사를 적용합니다. 개발 서버와 정적 빌드는 Vite, Node 테스트 실행은 tsx가 담당합니다. React, Vue 같은 UI 프레임워크와 런타임 npm 의존성은 사용하지 않습니다.
+4×4 카드에서 같은 카드 두 장을 찾고, 오른쪽 위 **렌더링 검사기**로 그 클릭의 커밋을 열어 보세요. **Phase 2** 탭에서 상태와 Props의 전후 값을, **Phase 1** 탭에서 실제 DOM에 적용한 Patch를 볼 수 있습니다. 두 탭은 같은 커밋을 보여줍니다.
 
-![DOM 실험실](docs/images/dom-lab.png)
+[빠른 실행](#빠른-실행) · [Phase 2](#phase-2-상태와-hooks) · [Phase 1](#phase-1-virtual-dom과-dom-반영) · [4분 발표 순서](#4분-발표-순서)
+
+[![전체 화면 카드 짝 맞추기 게임에서 하트 K 두 장을 맞춘 모습](docs/images/memory-game.png)](docs/images/memory-game.png)
 
 ## 빠른 실행
 
@@ -31,32 +33,44 @@ npm run preview           # 빌드 결과물 확인
 
 기본 포트가 사용 중이면 `npm run dev -- --port 5174`로 바꾸세요. E2E는 5173 포트를 사용합니다. CI의 E2E는 Vite preview를 통해 `dist/` 결과물을 검증합니다.
 
-## 직접 해볼 수 있는 것
+## Phase 2 상태와 Hooks
 
-### Phase 1 — DOM 실험실
+2번 카드를 먼저 뒤집고 같은 하트 K인 10번 카드를 고른 장면입니다. 오른쪽 위 **렌더링 검사기 열기 → Phase 2 · State**에서 같은 커밋의 상태 전후와 자식 Props를 볼 수 있습니다.
 
-1. 실제 영역의 샘플 DOM을 읽어 Virtual DOM을 만듭니다.
-2. 해당 트리를 이용해 테스트 영역을 렌더링합니다.
-3. HTML 소스를 수정하거나 **직접 편집**에서 문구·폼 값을 수정합니다.
-4. **Patch 적용** 또는 **Ctrl/Cmd + Enter**로 변경 부분만 실제 DOM에 반영합니다.
-5. **뒤로가기 / 앞으로가기 / 이력 항목**으로 두 영역을 함께 복원합니다.
+[![Phase 2 검사기에서 열린 카드와 짝을 맞춘 카드, Card Props의 전후 값을 비교하는 화면](docs/images/memory-phase-2.png)](docs/images/memory-phase-2.png)
 
-텍스트·속성·추가·삭제·교체·key 재정렬·폼·SVG 예제가 있습니다. `MutationObserver`는 직접 편집의 구조·속성·텍스트 변경을 관찰하며, DOM 속성 변경 알림이 발생하지 않는 폼 값은 input 이벤트와 DOM 스냅샷으로 읽습니다.
+| 검사기 항목           | 변경 전 | 변경 후   |
+| --------------------- | ------- | --------- |
+| `open`                | `[2]`   | `[]`      |
+| `matched`             | `[]`    | `[2, 10]` |
+| `Card[2].appearance`  | `open`  | `matched` |
+| `Card[10].appearance` | `down`  | `matched` |
 
-이력은 깊은 복사로 최대 50개를 보관합니다. 변경이 없으면 이력을 추가하지 않고, 과거에서 새 Patch를 만들면 앞으로가기 분기를 제거합니다. 이력 이동은 적용하지 않은 편집 내용을 선택한 스냅샷으로 교체합니다.
+루트 `GameBoard`가 `useState`로 카드 상태를 관리하고, 자식 `Card`는 Props로 받은 앞면·뒷면·완료 상태에 따라 Virtual DOM을 반환합니다. `useMemo`는 카드의 클릭 함수를 재사용합니다. 서로 다른 카드를 고르면 DOM 반영 뒤 `useEffect`가 1.2초 타이머를 예약합니다. 검사기의 **커밋 목록**에서 타이머를 예약한 커밋과 두 카드가 다시 덮인 커밋을 각각 볼 수 있습니다. [게임 코드](src/demo/memory-game.ts)
 
-### Phase 2 — Hooks 작업 보드
+## Phase 1 Virtual DOM과 DOM 반영
 
-![Hooks 작업 보드](docs/images/hooks-board.png)
+검사기를 **Phase 1 · DOM**으로 바꾸면 **같은 하트 K 짝 맞춤 커밋**의 실제 Patch 기록을 확인할 수 있습니다.
 
-- 작업 추가·완료·삭제·검색·필터·순서 반전
-- 루트 `Board`가 모든 상태를 관리하고 `TaskRow`, `ProgressCard`는 props만 받는 순수 함수
-- `useMemo`: 작업 목록/검색/필터 의존성이 바뀔 때만 필터링·완료 수 계산
-- `useEffect`: localStorage 저장과 문서 제목 갱신, 이전 effect cleanup
-- **+3 한 번에**: 함수형 상태 갱신 세 번을 하나의 commit으로 묶는 실험
-- 실제 Fiber 트리, commit 수, 처리한 Fiber 수, yield 수, memo/effect 실행 수 확인
+[![Phase 1 검사기에서 같은 짝 맞춤의 실제 Patch 종류와 경로, 전후 값을 보여주는 화면](docs/images/memory-phase-1.png)](docs/images/memory-phase-1.png)
 
-작업은 이 브라우저의 localStorage에 저장되며 서버로 전송하지 않습니다. 저장소 접근이 불가능해도 메모리에서 동작합니다.
+- **`PROPS`**는 두 카드의 `className`을 `memory-card-matched`가 포함된 값으로 바꾸고, 완료 표식과 접근성 라벨을 갱신합니다.
+- **`TEXT`**는 카드 안내 문구나 하단의 맞춘 짝 수처럼 바뀐 텍스트를 반영합니다.
+- **경로**는 변경된 노드가 Virtual DOM 트리의 어디에 있는지 나타냅니다. 카드 자리마다 같은 `key`를 사용하므로 뒤집은 뒤에도 기존 카드 버튼 DOM을 재사용합니다.
+
+검사기는 커밋에서 수집한 실제 Patch 작업과 Virtual DOM의 전후 값을 표시합니다. 화면에 나온 16개는 **이 커밋의 논리적 Patch 작업 수**입니다. [Diff 코드](src/core/diff.ts) · [Patch 코드](src/core/patch.ts) · [검사기 코드](src/demo/game-inspector.ts)
+
+## 4분 발표 순서
+
+발표에서는 README 맨 위에서 출발해 **Phase 2 → Phase 1 → 구현의 중심** 순서로 내려가면 됩니다. 두 캡처는 같은 커밋이라 화면을 띄운 채 상태 변화와 DOM 반영을 연결해서 설명할 수 있습니다.
+
+| 시간      | README에서 보여줄 곳                                              | 설명할 내용                                                                                             |
+| --------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 0:00–0:25 | 맨 위 게임 사진                                                   | 카드 한 번의 선택이 어떻게 화면 변경으로 이어지는지 보여주는 Mini React입니다.                          |
+| 0:25–1:25 | [Phase 2 상태와 Hooks](#phase-2-상태와-hooks)                     | 2번과 10번이 짝이 되면 `matched`에 두 번호가 들어가고, 자식 카드가 `matched` Props를 받습니다.          |
+| 1:25–2:30 | [Phase 1 Virtual DOM과 DOM 반영](#phase-1-virtual-dom과-dom-반영) | 같은 커밋에서 카드 클래스가 바뀌어 금색으로 표시되고, 맞춘 짝 수가 1로 바뀝니다.                        |
+| 2:30–3:30 | [구현의 중심](#구현의-중심)                                       | Fiber가 컴포넌트와 Hook을 평가해 다음 Virtual DOM을 만들고, 공통 Diff·Patch 엔진이 화면을 갱신합니다.   |
+| 3:30–4:00 | [검증과 차별점](#검증과-차별점)                                   | 카드 버튼이 같은 DOM 객체로 유지되는지와, 다른 카드 두 장이 타이머로 다시 덮이는 동작을 테스트했습니다. |
 
 ## 구현의 중심
 
@@ -73,9 +87,12 @@ npm run preview           # 빌드 결과물 확인
    동기 commit: patch() → hooks 확정 → effects
 ```
 
-Fiber는 개별 작업 사이에 양보할 수 있는 트리입니다. **5ms 예산을 가진 macrotask**가 작업을 이어갑니다. `current`는 commit된 트리, 작업 중 트리는 다음 버전, `alternate`는 이전 Fiber를 참조합니다. 전체 render가 완료되기 전에는 실제 DOM을 수정하지 않습니다.
+Fiber는 `child`, `sibling`, `return`으로 작업 위치를 기록합니다. 한 차례의 작업에 약 5ms를 할당하고, 남은 작업은 다음 차례에 이어갈 수 있습니다. 렌더링에서 새 Virtual DOM과 변경 계획을 완성한 뒤 커밋에서 `patch()`로 실제 DOM에 적용합니다.
 
-Phase 1은 HTML 스냅샷끼리 `diff()`를 직접 실행합니다. Phase 2는 함수형 컴포넌트를 Fiber 작업으로 평가한 뒤 같은 `diffSteps()` / `patch()`로 host DOM을 갱신합니다. Phase 2만을 위한 별도 DOM 교체 구현은 없습니다.
+카드 게임과 작업 보드는 함수형 컴포넌트의 출력을 만들고 `diffSteps()`와 `patch()`를 호출합니다. HTML 실험실은 편집된 DOM을 Virtual DOM으로 바꾼 뒤 `diff()`로 같은 비교 엔진을 실행합니다. 엔진과 데모는 strict TypeScript로 작성했고 UI 프레임워크나 런타임 npm 의존성 없이 동작합니다.
+
+<details>
+<summary>엔진 사용 예제 · Counter 컴포넌트</summary>
 
 ```ts
 import { h, FunctionComponent, useState, useEffect, useMemo } from './src/core/index.ts';
@@ -105,21 +122,33 @@ await app.whenIdle();
 // app.unmount();
 ```
 
+</details>
+
+## 추가 실험
+
+| 화면                                            | 확인할 수 있는 것                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [HTML 실험실](http://127.0.0.1:5173/#lab)       | DOM → VNode 변환, HTML 편집과 Patch, 이전·다음 스냅샷 복원                                 |
+| [Hooks 작업 보드](http://127.0.0.1:5173/#hooks) | 작업 추가 실행 기록, `useMemo`·`useEffect`, `+3`의 요청 3개를 커밋 한 번으로 처리하는 배칭 |
+
 ## 소스 안내
 
-| 경로                   | 역할                                            |
-| ---------------------- | ----------------------------------------------- |
-| `src/core/vnode.ts`    | h, DOM → VNode, key 매칭                        |
-| `src/core/dom.ts`      | DOM 생성, 속성·이벤트·폼·SVG 반영               |
-| `src/core/diff.ts`     | 5가지 핵심 변경 계획, 중복 key 검증, generator  |
-| `src/core/patch.ts`    | 계획을 실제 DOM에 적용, key 이동·정체성 보존    |
-| `src/core/fiber.ts`    | FunctionComponent, 작업 루프, commit, lifecycle |
-| `src/core/hooks.ts`    | 호출 순서 기반 슬롯, 상태 큐, effect, memo      |
-| `src/lab/`             | Phase 1 편집기, HTML 제한, 이력                 |
-| `src/demo/board.ts`    | Phase 2 루트와 순수 자식 컴포넌트               |
-| `tests/`               | 단위·통합·회귀 테스트 및 E2E                    |
-| `docs/ARCHITECTURE.md` | 핵심 코드 설명, 설계 판단, 학습 질문            |
-| `docs/REQUIREMENTS.md` | 과제 요구사항과 코드·검증 연결                  |
+| 경로                                                       | 역할                                            |
+| ---------------------------------------------------------- | ----------------------------------------------- |
+| `src/core/vnode.ts`                                        | h, DOM → VNode, key 매칭                        |
+| `src/core/dom.ts`                                          | DOM 생성, 속성·이벤트·폼·SVG 반영               |
+| `src/core/diff.ts`                                         | 5가지 핵심 변경 계획, 중복 key 검증, generator  |
+| `src/core/patch.ts`                                        | 계획을 실제 DOM에 적용, key 이동·정체성 보존    |
+| `src/core/fiber.ts`                                        | FunctionComponent, 작업 루프, commit, lifecycle |
+| `src/core/hooks.ts`                                        | 호출 순서 기반 슬롯, 상태 큐, effect, memo      |
+| `src/lab/`                                                 | Phase 1 편집기, HTML 제한, 이력                 |
+| [`src/demo/memory-game.ts`](src/demo/memory-game.ts)       | 카드 상태, 순수 Card 컴포넌트, 다시 덮는 타이머 |
+| [`src/demo/game-inspector.ts`](src/demo/game-inspector.ts) | 커밋 이력, 상태·Props 전후, 실제 Patch 기록     |
+| [`src/demo/memory-table.css`](src/demo/memory-table.css)   | 화면 전체를 채우는 테이블과 오른쪽 검사기 배치  |
+| `src/demo/board.ts`                                        | Phase 2 루트와 순수 자식 컴포넌트               |
+| `tests/`                                                   | 단위·통합·회귀 테스트 및 E2E                    |
+| `docs/ARCHITECTURE.md`                                     | 핵심 코드 설명, 설계 판단, 학습 질문            |
+| `docs/REQUIREMENTS.md`                                     | 과제 요구사항과 코드·검증 연결                  |
 
 공통 타입은 `src/core/types.ts`, DOM 유틸리티는 `src/shared/dom.ts`에 있습니다. `tsconfig.json`은 strict 타입 검사, `vite.config.ts`는 개발 서버와 정적 빌드를 설정합니다. 구성과 타입 설계는 [TypeScript 가이드](docs/TYPESCRIPT.md)를 참고하세요.
 
@@ -130,8 +159,8 @@ await app.whenIdle();
 - 120개의 결정적 무작위 key 배열 변경을 새 렌더링 결과와 대조
 - 초기화·이벤트 교체·폼 값·SVG·주석·공백·빈 트리·중복 key 검사
 - Hook 순서 위반, render 중 DOM 불변, render 도중 들어온 상태 변경, unmount와 이전 setter 검사
-- E2E 3개 시나리오를 데스크톱/모바일 두 환경에서 실행하는 GitHub Actions CI
-- 실제 측정값을 사용하는 변경 로그·시간 이동·Fiber Inspector
+- E2E 4개 시나리오를 데스크톱과 모바일에서 실행하는 GitHub Actions CI
+- 카드 뒤집기와 짝 맞춤, `useEffect` 타이머, 검사기 탭 전환과 실제 Patch 기록을 브라우저에서 확인
 
 `PATCH OPS`는 이벤트 리스너 교체를 포함한 논리적 Patch 작업 수입니다. 하나의 subtree CREATE도 한 작업으로 셉니다. 실제 브라우저 layout/paint 횟수나 생성한 전체 DOM 노드 수와 같지 않습니다. 시간 수치는 로컬 측정이며 React와의 성능 비교 결과가 아닙니다.
 

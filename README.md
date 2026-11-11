@@ -2,7 +2,7 @@
 
 **카드 짝 맞추기를 하면서 Mini React가 상태를 실제 DOM에 반영하는 과정을 확인할 수 있는 Vanilla TypeScript 프로젝트입니다.**
 
-4×4 카드에서 같은 카드 두 장을 찾고, 오른쪽 위 **렌더링 검사기**로 그 클릭의 커밋을 열어 보세요. **Phase 2** 탭에서 상태와 Props의 전후 값을, **Phase 1** 탭에서 실제 DOM에 적용한 Patch를 볼 수 있습니다. 두 탭은 같은 커밋을 보여줍니다.
+4×4 카드에서 한 장씩 두 장을 고르면 시도 횟수가 올라갑니다. 오른쪽 위 **렌더링 검사기**에서 그 클릭의 커밋을 열어 보세요. **Phase 2**는 상태 변경 요청 수와 상태·Props의 전후 값을, **Phase 1**은 같은 커밋에서 실제 DOM에 적용한 Patch를 보여줍니다.
 
 [빠른 실행](#빠른-실행) · [Phase 2](#phase-2-상태와-hooks) · [Phase 1](#phase-1-virtual-dom과-dom-반영) · [4분 발표 순서](#4분-발표-순서)
 
@@ -37,18 +37,25 @@ npm run preview           # 빌드 결과물 확인
 
 캡처는 2번 카드를 먼저 뒤집고 같은 하트 K인 10번 카드를 고른 장면입니다. 카드 위치는 새 게임마다 달라질 수 있습니다. 오른쪽 위 **렌더링 검사기 열기 → Phase 2 · State**에서 `#3 · K 하트 짝 맞춤` 커밋의 상태와 자식 Props가 어떻게 바뀌었는지 볼 수 있습니다.
 
-[![Phase 2 검사기에서 열린 카드와 짝을 맞춘 카드, Card Props의 전후 값을 비교하는 화면](docs/images/memory-phase-2.png)](docs/images/memory-phase-2.png)
+[![Phase 2 검사기에서 상태 변경 요청 2개와 커밋 1회, 카드 상태와 시도 횟수의 전후 값을 비교하는 화면](docs/images/memory-phase-2.png)](docs/images/memory-phase-2.png)
 
 | 검사기 항목           | 변경 전 | 변경 후   |
 | --------------------- | ------- | --------- |
 | `open`                | `[2]`   | `[]`      |
 | `matched`             | `[]`    | `[2, 10]` |
+| `attempts`            | `0`     | `1`       |
 | `Card[2].appearance`  | `open`  | `matched` |
 | `Card[10].appearance` | `down`  | `matched` |
 
-루트 `GameBoard`가 `useState`로 카드 상태를 관리합니다. 두 번째 카드를 누르면 `setGame()` 한 번으로 `open`, `matched`, `move`가 들어 있는 게임 상태를 갱신합니다. 자식 `Card`는 `appearance` Prop의 값에 따라 앞면, 뒷면, 짝 맞춤 상태의 Virtual DOM을 반환합니다. 여러 상태 변경 요청을 모으는 배칭은 [추가 실험의 Hooks 작업 보드](#추가-실험)에서 확인할 수 있습니다.
+루트 `GameBoard`가 `useState`로 카드 상태와 시도 횟수를 관리합니다. 자식 `Card`는 `appearance` Prop을 받아 앞면, 뒷면, 짝 맞춤 상태의 Virtual DOM을 반환합니다.
 
-`useMemo`는 카드의 클릭 함수를 재사용합니다. 서로 다른 카드를 고르면 DOM 반영 뒤 `useEffect`가 1.2초 타이머를 예약합니다. 검사기의 **커밋 목록**에서 타이머를 예약한 커밋과 두 카드가 다시 덮인 커밋을 각각 볼 수 있습니다. [게임 코드](src/demo/memory-game.ts)
+### 카드 게임에서 배칭 확인하기
+
+1. **첫 번째 카드**를 누르면 `setGame()`으로 그 카드의 앞면을 보여줍니다. 시도 횟수는 그대로입니다.
+2. **두 번째 카드**를 누르면 같은 클릭에서 `setGame()`으로 짝 판정 결과를, `setAttempts()`로 시도 횟수 증가를 요청합니다.
+3. 엔진이 두 요청을 모아 카드 모습과 시도 횟수를 한 번에 반영합니다. 이 배칭 결과가 검사기의 **상태 변경 요청 2개 · 커밋 1회**입니다.
+
+`useMemo`는 카드의 클릭 함수를 재사용합니다. 시도 횟수는 짝 맞춤 성공 여부와 관계없이 올라갑니다. 서로 다른 카드를 고르면 DOM 반영 뒤 `useEffect`가 1.2초 타이머를 예약합니다. 타이머가 두 카드를 다시 덮는 과정은 커밋 목록에서 따로 볼 수 있습니다. 새 게임을 시작하면 시도 횟수는 0이 됩니다. [게임 코드](src/demo/memory-game.ts)
 
 ## Phase 1 Virtual DOM과 DOM 반영
 
@@ -57,10 +64,10 @@ npm run preview           # 빌드 결과물 확인
 [![Phase 1 검사기에서 같은 짝 맞춤의 실제 Patch 종류와 경로, 전후 값을 보여주는 화면](docs/images/memory-phase-1.png)](docs/images/memory-phase-1.png)
 
 - **`PROPS`**는 두 카드의 `className`을 `memory-card-matched`가 포함된 값으로 바꾸고, 완료 표식과 접근성 라벨을 갱신합니다.
-- **`TEXT`**는 카드 안내 문구나 하단의 맞춘 짝 수처럼 바뀐 텍스트를 반영합니다.
+- **`TEXT`**는 카드 안내 문구, 하단의 시도 횟수와 맞춘 짝 수처럼 바뀐 텍스트를 반영합니다.
 - **경로**는 변경된 노드가 Virtual DOM 트리의 어디에 있는지 나타냅니다. 카드 자리마다 같은 `key`를 사용하므로 뒤집은 뒤에도 기존 카드 버튼 DOM을 재사용합니다.
 
-검사기는 커밋에서 수집한 실제 Patch 작업과 Virtual DOM의 전후 값을 표시합니다. 화면에 나온 16개는 **이 커밋의 논리적 Patch 작업 수**입니다. [Diff 코드](src/core/diff.ts) · [Patch 코드](src/core/patch.ts) · [검사기 코드](src/demo/game-inspector.ts)
+검사기는 커밋에서 수집한 실제 Patch 작업과 Virtual DOM의 전후 값을 표시합니다. 목록 상단의 숫자는 **선택한 커밋의 논리적 Patch 작업 수**입니다. [Diff 코드](src/core/diff.ts) · [Patch 코드](src/core/patch.ts) · [검사기 코드](src/demo/game-inspector.ts)
 
 ## 4분 발표 순서
 
@@ -69,8 +76,8 @@ npm run preview           # 빌드 결과물 확인
 | 시간      | README에서 보여줄 곳                                              | 설명할 내용                                                                                             |
 | --------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | 0:00–0:25 | 맨 위 게임 사진                                                   | 카드 한 번의 선택이 어떻게 화면 변경으로 이어지는지 보여주는 Mini React입니다.                          |
-| 0:25–1:25 | [Phase 2 상태와 Hooks](#phase-2-상태와-hooks)                     | 오른쪽의 `matched [] → [2, 10]`과 카드의 `appearance` 값이 `matched`로 바뀐 줄을 가리킵니다.            |
-| 1:25–2:30 | [Phase 1 Virtual DOM과 DOM 반영](#phase-1-virtual-dom과-dom-반영) | 같은 커밋에서 카드 클래스가 바뀌어 금색으로 표시되고, 맞춘 짝 수가 1로 바뀝니다.                        |
+| 0:25–1:25 | [Phase 2 상태와 Hooks](#phase-2-상태와-hooks)                     | `matched`, `attempts`의 전후 값을 짚고 요청 2개가 한 커밋에 처리된 기록을 보여줍니다.                   |
+| 1:25–2:30 | [Phase 1 Virtual DOM과 DOM 반영](#phase-1-virtual-dom과-dom-반영) | 같은 커밋에서 카드가 금색으로 바뀌고 하단에 `시도 1회`, `맞춘 짝 1 / 8`이 표시됩니다.                   |
 | 2:30–3:30 | [구현의 중심](#구현의-중심)                                       | 상태 변경 요청부터 Fiber의 컴포넌트 실행, Virtual DOM 생성, Diff·Patch까지 흐름도를 따라갑니다.         |
 | 3:30–4:00 | [검증과 차별점](#검증과-차별점)                                   | 카드 버튼이 같은 DOM 객체로 유지되는지와, 다른 카드 두 장이 타이머로 다시 덮이는 동작을 테스트했습니다. |
 
@@ -164,7 +171,7 @@ await app.whenIdle();
 - 초기화·이벤트 교체·폼 값·SVG·주석·공백·빈 트리·중복 key 검사
 - Hook 순서 위반, render 중 DOM 불변, render 도중 들어온 상태 변경, unmount와 이전 setter 검사
 - GitHub Actions CI에서 E2E 4개 시나리오를 데스크톱과 모바일 Chromium 프로필로 각각 실행
-- 카드 뒤집기와 짝 맞춤, `useEffect` 타이머, 검사기 탭 전환과 실제 Patch 기록을 브라우저에서 확인
+- 카드 뒤집기와 짝 맞춤, 시도 횟수와 배칭 기록, `useEffect` 타이머, 검사기 탭과 실제 Patch 기록을 브라우저에서 확인
 
 `PATCH OPS`는 이벤트 리스너 교체를 포함한 논리적 Patch 작업 수입니다. 하나의 subtree CREATE도 한 작업으로 셉니다. 실제 브라우저 layout/paint 횟수나 생성한 전체 DOM 노드 수와 같지 않습니다. 시간 수치는 로컬 측정이며 React와의 성능 비교 결과가 아닙니다.
 

@@ -1,5 +1,5 @@
 import { FunctionComponent, h, useEffect, useMemo, useState } from '../core/index.ts';
-import type { CommitMetrics, VNode } from '../core/index.ts';
+import type { CommitMetrics, StateSetter, VNode } from '../core/index.ts';
 import { mustQuery } from '../shared/dom.ts';
 import { capturePatches, setupGameInspector } from './game-inspector.ts';
 
@@ -105,34 +105,47 @@ function positions(cards: readonly number[]): string {
 
 export function setupMemoryGame() {
   const inspect = setupGameInspector();
-  let rendered: Game;
-  let committed: Game | undefined;
+  let rendered: { game: Game; attempts: number };
+  let committed: typeof rendered | undefined;
   let committedTree: VNode | null = null;
+  let pendingGame: Game | undefined;
   let scheduledCover: Game['open'] | undefined;
+
+  function queueGame(setGame: StateSetter<Game>, game: Game): void {
+    // Another click may arrive before this game state reaches the DOM.
+    pendingGame = game;
+    setGame(game);
+  }
 
   function GameBoard(): VNode {
     const [game, setGame] = useState(newGame);
+    const [attempts, setAttempts] = useState(0);
     const flip = useMemo(
       () =>
         Array.from({ length: faces.length * 2 }, (_, index) => () => {
-          if (committed && canFlip(committed, index))
-            setGame((previous) => flipCard(previous, index));
+          const current = pendingGame ?? committed?.game;
+          if (!current) return;
+          const next = flipCard(current, index);
+          if (next === current) return;
+          queueGame(setGame, next);
+          if (current.open.length === 1) setAttempts((count) => count + 1);
         }),
-      [setGame],
+      [setGame, setAttempts],
     );
     const restart = useMemo(
-      () => () => setGame({ ...newGame(), move: { kind: 'restart', cards: [] } }),
-      [setGame],
+      () => () => {
+        queueGame(setGame, { ...newGame(), move: { kind: 'restart', cards: [] } });
+        setAttempts(0);
+      },
+      [setGame, setAttempts],
     );
     useEffect(() => {
       if (game.open.length !== 2) return;
       const open = game.open;
       const timer = setTimeout(() => {
-        setGame((previous) =>
-          previous.open === open
-            ? { ...previous, open: [], move: { kind: 'cover', cards: open } }
-            : previous,
-        );
+        const current = pendingGame ?? committed?.game;
+        if (current?.open === open)
+          queueGame(setGame, { ...current, open: [], move: { kind: 'cover', cards: open } });
       }, coverDelay);
       scheduledCover = open;
       return () => {
@@ -141,7 +154,7 @@ export function setupMemoryGame() {
       };
     }, [game.open, setGame]);
 
-    rendered = game;
+    rendered = { game, attempts };
     const pairs = game.matched.length / 2;
     const hint =
       pairs === faces.length
@@ -190,6 +203,7 @@ export function setupMemoryGame() {
           h('span'),
           h('span'),
         ),
+        h('span', { id: 'game-attempts', className: 'memory-attempts' }, `시도 ${attempts}회`),
         h(
           'span',
           { id: 'game-pairs', className: 'memory-pairs' },
@@ -203,38 +217,46 @@ export function setupMemoryGame() {
   function record(metrics: CommitMetrics): void {
     const previous = committed;
     const previousTree = committedTree;
+    const { game, attempts } = rendered;
     committed = rendered;
     committedTree = metrics.root.output;
-    const move = rendered.move;
-    if (!previous || !move || move === previous.move) return;
+    if (pendingGame === game) pendingGame = undefined;
+    const move = game.move;
+    if (!previous || !move || move === previous.game.move) return;
 
     const actions = {
       flip: `${move.cards[0] + 1}번 카드 뒤집기`,
-      match: `${rendered.deck[move.cards[0]]?.name ?? ''} 짝 맞춤`,
+      match: `${game.deck[move.cards[0]]?.name ?? ''} 짝 맞춤`,
       mismatch: '서로 다른 카드',
       cover: '두 카드 다시 덮기',
       restart: '새 게임',
     };
     let effect: string | undefined;
-    if (move.kind === 'mismatch' && scheduledCover === rendered.open)
+    if (move.kind === 'mismatch' && scheduledCover === game.open)
       effect = `DOM 반영 뒤 타이머 예약 (${coverDelay}ms)`;
     else if (move.kind === 'cover') effect = '예약된 타이머가 상태 변경을 요청함';
-    else if (move.kind === 'restart' && previous.open.length === 2) effect = '이전 타이머 정리';
+    else if (move.kind === 'restart' && previous.game.open.length === 2)
+      effect = '이전 타이머 정리';
 
     inspect({
       number: metrics.commits,
       action: actions[move.kind],
+      stateRequests: instance.hooks.reduce(
+        (count, hook) => count + (hook.kind === 'state' ? hook.consumed : 0),
+        0,
+      ),
       state: [
-        { field: 'open', before: positions(previous.open), after: positions(rendered.open) },
+        { field: 'open', before: positions(previous.game.open), after: positions(game.open) },
         {
           field: 'matched',
-          before: positions(previous.matched),
-          after: positions(rendered.matched),
+          before: positions(previous.game.matched),
+          after: positions(game.matched),
         },
+        { field: 'attempts', before: String(previous.attempts), after: String(attempts) },
       ],
-      props: rendered.deck.flatMap((_, index) => {
-        const before = appearance(previous, index);
-        const after = appearance(rendered, index);
+      props: game.deck.flatMap((_, index) => {
+        const before = appearance(previous.game, index);
+        const after = appearance(game, index);
         return before === after ? [] : [{ field: `Card[${index + 1}].appearance`, before, after }];
       }),
       effect,
@@ -242,7 +264,7 @@ export function setupMemoryGame() {
     });
   }
 
-  return new FunctionComponent(
+  const instance = new FunctionComponent(
     GameBoard,
     {},
     {
@@ -253,5 +275,6 @@ export function setupMemoryGame() {
         box.textContent = error.message;
       },
     },
-  ).mount(mustQuery('#game-app'));
+  );
+  return instance.mount(mustQuery('#game-app'));
 }

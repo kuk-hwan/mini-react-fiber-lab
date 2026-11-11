@@ -110,7 +110,7 @@ test('responsive layout, keyboard patch and no application errors', async ({ pag
   expect(errors).toEqual([]);
 });
 
-test('memory game keeps the card DOM and records flips, matches and the mismatch timer', async ({
+test('memory game preserves card DOM and records attempts, batching and the mismatch timer', async ({
   page,
 }) => {
   // Keeping each shuffle swap on its current index makes the test deck repeat the same eight faces.
@@ -126,8 +126,10 @@ test('memory game keeps the card DOM and records flips, matches and the mismatch
   const game = page.getByRole('group', { name: '4×4 게임 보드' });
   const cards = game.getByRole('button');
   const pairs = page.locator('#game-pairs');
+  const attempts = page.locator('#game-attempts');
   const inspector = page.locator('#game-inspector');
   const state = page.locator('#game-inspector-state');
+  const commitSummary = state.locator('.inspector-commit-summary');
   const dom = page.locator('#game-inspector-dom');
   const commits = page.getByLabel('커밋', { exact: true });
   const openInspector = page
@@ -140,6 +142,7 @@ test('memory game keeps the card DOM and records flips, matches and the mismatch
   await expect(page.locator('body')).toHaveClass('game-theme');
   await expect(cards.first()).toHaveCSS('background-image', /memory-card-back/);
   await expect(pairs).toHaveText('맞춘 짝 0 / 8');
+  await expect(attempts).toHaveText('시도 0회');
   await expect(
     page.getByRole('complementary', { name: '모의 광고' }).getByText('모의 광고'),
   ).toHaveCount(4);
@@ -152,6 +155,9 @@ test('memory game keeps the card DOM and records flips, matches and the mismatch
   await openInspector.click();
   await expect(state.locator('dd').first()).toHaveText('[] → [1]');
   await expect(state).toContainText('Card[1].appearance');
+  await expect(attempts).toHaveText('시도 0회');
+  await expect(commitSummary).toHaveText('상태 변경 요청 1개 · 커밋 1회');
+  const firstFlipCommit = Number(await commits.inputValue());
   await domTab.click();
   await expect(state).toBeHidden();
   await expect(dom.locator('li').filter({ hasText: /TEXT.*nodeValue.*♠/ })).toHaveCount(1);
@@ -160,24 +166,35 @@ test('memory game keeps the card DOM and records flips, matches and the mismatch
   await expect(cards.first()).toHaveAccessibleName('1번 카드, A 스페이드 · 짝 맞춤');
   await expect(game.locator('.memory-card-matched')).toHaveCount(2);
   await expect(pairs).toHaveText('맞춘 짝 1 / 8');
+  await expect(attempts).toHaveText('시도 1회');
   await expect(dom).toContainText('memory-card-matched');
+  await expect(dom).toContainText('시도 1회');
   await stateTab.click();
   await expect(state.locator('dd').nth(1)).toHaveText('[] → [1, 9]');
+  await expect(state.locator('dd').nth(2)).toHaveText('0 → 1');
+  await expect(commits).toHaveValue(String(firstFlipCommit + 1));
+  await expect(commitSummary).toHaveText('상태 변경 요청 2개 · 커밋 1회');
   expect(await firstCard!.evaluate((node) => node === document.querySelector('.memory-card'))).toBe(
     true,
   );
 
   await cards.nth(1).click();
+  await expect(cards.nth(1)).toHaveClass(/memory-card-open/);
   await cards.nth(2).click();
   await expect(commits.locator('option').filter({ hasText: '서로 다른 카드' })).toHaveCount(1);
   await expect(game.locator('.memory-card-open')).toHaveCount(0);
   await expect(commits.locator('option:checked')).toContainText('두 카드 다시 덮기');
   await expect(state.locator('dd').first()).toHaveText('[2, 3] → []');
+  await expect(attempts).toHaveText('시도 2회');
+  await expect(state.locator('dd').nth(2)).toHaveText('2 → 2');
+  await expect(commitSummary).toHaveText('상태 변경 요청 1개 · 커밋 1회');
   await commits.selectOption({
     label: (await commits.locator('option').filter({ hasText: '서로 다른 카드' }).textContent())!,
   });
   await expect(state).toContainText('타이머 예약 (1200ms)');
   await expect(state.locator('dd').first()).toHaveText('[2] → [2, 3]');
+  await expect(state.locator('dd').nth(2)).toHaveText('1 → 2');
+  await expect(commitSummary).toHaveText('상태 변경 요청 2개 · 커밋 1회');
   await commits.selectOption({ index: 0 });
   await expect(pairs).toHaveText('맞춘 짝 1 / 8');
 
@@ -186,10 +203,23 @@ test('memory game keeps the card DOM and records flips, matches and the mismatch
   await page.getByRole('button', { name: '다시 시작' }).click();
   await expect(game.locator('.memory-card-down')).toHaveCount(16);
   await expect(pairs).toHaveText('맞춘 짝 0 / 8');
+  await expect(attempts).toHaveText('시도 0회');
   await openInspector.click();
   await expect(commits.locator('option:checked')).toContainText('새 게임');
   await expect(state.locator('dd').nth(1)).toHaveText('[1, 9] → []');
-  await page.keyboard.press('Escape');
+  await expect(state.locator('dd').nth(2)).toHaveText('2 → 0');
+
+  await cards.first().click();
+  await expect(cards.first()).toHaveClass(/memory-card-open/);
+  await cards.nth(8).evaluate((card) => {
+    if (!(card instanceof HTMLButtonElement)) throw new Error('Expected a card button');
+    card.click();
+    card.click();
+  });
+  await expect(attempts).toHaveText('시도 1회');
+  await expect(game.locator('.memory-card-matched')).toHaveCount(2);
+  await expect(commitSummary).toHaveText('상태 변경 요청 2개 · 커밋 1회');
+  await closeInspector.press('Escape');
   await expect(inspector).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,

@@ -234,7 +234,8 @@
   color: #21180e;
   padding: 7px 12px;
 }
-.memory-pairs {
+.memory-pairs,
+.memory-attempts {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -460,6 +461,15 @@
   font:
     600 12px 'IBM Plex Mono',
     monospace;
+}
+.inspector-commit-summary {
+  margin: 0 0 14px;
+  border: 1px solid var(--inspector-line);
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: #eaf0f7;
+  color: #254c80;
+  font-weight: 700;
 }
 .inspector-group + .inspector-group {
   margin-top: 14px;

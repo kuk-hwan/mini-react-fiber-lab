@@ -17,6 +17,7 @@ interface PatchChange {
 interface GameCommit {
   number: number;
   action: string;
+  stateRequests: number;
   state: ValueChange[];
   props: ValueChange[];
   effect?: string;
@@ -126,7 +127,11 @@ export function setupGameInspector() {
   function renderCommit(): void {
     const commit = commits.find((entry) => String(entry.number) === select.value);
     if (!commit) return;
+    const summary = document.createElement('p');
+    summary.className = 'inspector-commit-summary';
+    summary.textContent = `상태 변경 요청 ${commit.stateRequests}개 · 커밋 1회`;
     state.replaceChildren(
+      summary,
       valueGroup('GameBoard · useState', commit.state),
       valueGroup('Card · Props', commit.props),
     );

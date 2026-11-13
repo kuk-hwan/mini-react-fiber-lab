@@ -2,10 +2,13 @@ import { setupLab } from './lab/lab.ts';
 import { setupBoard } from './demo/board.ts';
 import { setupMemoryGame } from './demo/memory-game.ts';
 import { mustQuery } from './shared/dom.ts';
+import { setupSystems } from './systems/dashboard.ts';
 
 let lab: ReturnType<typeof setupLab> | undefined;
 let board: ReturnType<typeof setupBoard> | undefined;
 let game: ReturnType<typeof setupMemoryGame> | undefined;
+let systems: ReturnType<typeof setupSystems> | undefined;
+const systemsMode = mustQuery('#page-systems');
 const experiment = mustQuery('#page-experiment');
 const experimentTitle = mustQuery('#experiment-title');
 const htmlMode = mustQuery('#page-lab');
@@ -17,12 +20,14 @@ const guideLink = mustQuery('.guide-link');
 
 function navigate(requestedPage: string): void {
   const showGuide = requestedPage === 'guide';
+  const showSystems = requestedPage === 'systems';
   const mode = requestedPage === 'lab' || requestedPage === 'hooks' ? requestedPage : 'game';
-  experiment.hidden = showGuide;
+  experiment.hidden = showGuide || showSystems;
+  systemsMode.hidden = !showSystems;
   guide.hidden = !showGuide;
   htmlMode.hidden = showGuide || mode !== 'lab';
   stateMode.hidden = showGuide || mode !== 'hooks';
-  gameMode.hidden = showGuide || mode !== 'game';
+  gameMode.hidden = showGuide || showSystems || mode !== 'game';
   inspectorToggle.hidden = gameMode.hidden;
   document.body.classList.toggle('game-theme', !gameMode.hidden);
   experimentTitle.hidden = !gameMode.hidden;
@@ -31,12 +36,14 @@ function navigate(requestedPage: string): void {
   if (!htmlMode.hidden && !lab) lab = setupLab();
   if (!stateMode.hidden && !board) board = setupBoard();
   if (!gameMode.hidden && !game) game = setupMemoryGame();
+  if (showSystems && !systems) systems = setupSystems(systemsMode);
 }
 window.addEventListener('hashchange', () => navigate(location.hash.slice(1)));
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) {
     board?.unmount();
     game?.unmount();
+    systems?.unmount();
   }
 });
 navigate(location.hash.slice(1));

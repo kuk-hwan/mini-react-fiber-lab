@@ -5,6 +5,10 @@
   "type": "module",
   "description": "Vanilla TypeScript Virtual DOM, Diff/Patch, Fiber and root-only Hooks lab",
   "scripts": {
+    "server": "python -m backend.server",
+    "sql": "python -m backend.cli",
+    "test:backend": "python -m unittest discover -s backend/tests -v",
+    "bench": "python -m backend.benchmark --rows 1000000 --output docs/benchmarks/latest.json",
     "dev": "vite",
     "start": "vite",
     "preview": "vite preview",

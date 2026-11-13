@@ -2,6 +2,7 @@ import { FunctionComponent, h, useEffect, useMemo, useState } from '../core/inde
 import type { CommitMetrics, StateSetter, VNode } from '../core/index.ts';
 import { mustQuery } from '../shared/dom.ts';
 import { capturePatches, setupGameInspector } from './game-inspector.ts';
+import { api } from '../systems/api.ts';
 
 const faces = [
   { rank: 'A', symbol: '♠', name: 'A 스페이드', red: false },
@@ -110,6 +111,8 @@ export function setupMemoryGame() {
   let committedTree: VNode | null = null;
   let pendingGame: Game | undefined;
   let scheduledCover: Game['open'] | undefined;
+  let saving = false;
+  let alive = true;
 
   function queueGame(setGame: StateSetter<Game>, game: Game): void {
     // Another click may arrive before this game state reaches the DOM.
@@ -120,6 +123,36 @@ export function setupMemoryGame() {
   function GameBoard(): VNode {
     const [game, setGame] = useState(newGame);
     const [attempts, setAttempts] = useState(0);
+    const [saveStatus, setSaveStatus] = useState('');
+    useEffect(
+      () => () => {
+        alive = false;
+      },
+      [],
+    );
+    const saveScore = useMemo(
+      () => async () => {
+        if (saving) return;
+        const snapshot = committed;
+        if (!snapshot) return;
+        saving = true;
+        setSaveStatus('저장 중…');
+        try {
+          const response = await api<{ row: { id: number } }>('/api/scores', 'POST', {
+            name: '카드 플레이어',
+            attempts: snapshot.attempts,
+            pairs: snapshot.game.matched.length / 2,
+          });
+          if (alive)
+            setSaveStatus(`기록 #${response.row.id} 저장 완료 · 저장소 실험실에서 확인하세요.`);
+        } catch (error) {
+          if (alive) setSaveStatus(error instanceof Error ? error.message : '저장 실패');
+        } finally {
+          saving = false;
+        }
+      },
+      [setSaveStatus],
+    );
     const flip = useMemo(
       () =>
         Array.from({ length: faces.length * 2 }, (_, index) => () => {
@@ -210,6 +243,16 @@ export function setupMemoryGame() {
           `맞춘 짝 ${pairs} / ${faces.length}`,
         ),
         h('button', { type: 'button', className: 'primary-button', onClick: restart }, '다시 시작'),
+        h(
+          'button',
+          { type: 'button', className: 'memory-save', disabled: saving, onClick: saveScore },
+          '현재 기록 저장',
+        ),
+        h(
+          'span',
+          { className: 'memory-save-status', role: 'status', hidden: !saveStatus },
+          saveStatus,
+        ),
       ),
     );
   }

@@ -1,10 +1,10 @@
-# Fiber Lab · Mini React
+# Fiber Lab · Mini React × Mini Redis × Mini DBMS
 
-**카드 짝 맞추기를 하면서 Mini React가 상태를 실제 DOM에 반영하는 과정을 확인할 수 있는 Vanilla TypeScript 프로젝트입니다.**
+**화면을 그리는 Mini React, 응답을 캐싱하는 Mini Redis, 파일과 인덱스로 데이터를 저장하는 Mini DBMS를 직접 구현한 프로젝트입니다.** 기존 카드 짝 맞추기와 Phase 1·Phase 2 렌더링 검사기를 유지하고, 게임 기록 저장과 저장소 실험실을 연결했습니다.
 
 4×4 카드에서 한 장씩 두 장을 고르면 시도 횟수가 올라갑니다. 오른쪽 위 **렌더링 검사기**에서 그 클릭의 커밋을 열어 보세요. **Phase 2**는 상태 변경 요청 수와 상태·Props의 전후 값을, **Phase 1**은 같은 커밋에서 실제 DOM에 적용한 Patch를 보여줍니다.
 
-[빠른 실행](#빠른-실행) · [Phase 2](#phase-2-상태와-hooks) · [Phase 1](#phase-1-virtual-dom과-dom-반영) · [4분 발표 순서와 대본](#4분-발표-순서)
+[빠른 실행](#빠른-실행) · [Mini Redis](#mini-redis-해시-테이블과-api-캐시) · [Mini DBMS](#mini-dbms-sql--b-트리--스레드-풀) · [실측 성능](#100만-건과-캐시-성능-실측) · [Mini React Phase 2](#phase-2-상태와-hooks) · [Mini React Phase 1](#phase-1-virtual-dom과-dom-반영) · [Mini React 4분 발표](#4분-발표-순서)
 
 [![전체 화면 카드 짝 맞추기 게임에서 하트 K 두 장을 맞춘 모습](docs/images/memory-game.png)](docs/images/memory-game.png)
 
@@ -31,7 +31,82 @@ npm run test:e2e          # 데스크톱 + 모바일 Chromium E2E
 npm run preview           # 빌드 결과물 확인
 ```
 
-기본 포트가 사용 중이면 `npm run dev -- --port 5174`로 바꾸세요. E2E는 5173 포트를 사용합니다. CI의 E2E는 Vite preview를 통해 `dist/` 결과물을 검증합니다.
+기본 포트가 사용 중이면 `npm run dev -- --port 5174`로 바꾸세요. E2E는 별도 5186/8788 포트와 `.data/e2e-*` 폴더를 사용하므로 실행 중인 개발 서버의 데이터를 수정하지 않습니다. CI의 E2E는 Vite preview를 통해 `dist/` 결과물을 검증합니다.
+
+### 서버까지 함께 실행하기
+
+서버에는 **Python 3.12 이상**이 필요하며 별도 pip 설치는 없습니다. 위의 프런트엔드 터미널을 둔 채, 저장소 루트에서 새 터미널을 열어 실행하세요.
+
+```bash
+npm run server       # HTTP API: 127.0.0.1:8787
+```
+
+상단 **저장소 실험실** 또는 [/#systems](http://127.0.0.1:5173/#systems)로 이동합니다. 카드 게임의 **현재 기록 저장** 버튼은 실제 게임의 시도 횟수와 맞춘 짝 수를 파일 DB에 보냅니다. 서버를 실행하지 않아도 기존 카드 게임·렌더링 검사기는 사용할 수 있습니다.
+
+```text
+Mini React 화면
+   ↓ fetch('/api/...')
+HTTP API → 고정 스레드 풀
+   ├─ 기록 저장: 파일 append → B+ 트리 등록 → 이전 캐시 무효화
+   └─ 기록 조회: 해시 캐시 HIT → 저장된 JSON 반환
+                  MISS → SQL → 파일 DB → TTL 캐시 저장
+   ↓ JSON 응답
+useState → Fiber → Virtual DOM → Diff → Patch → 화면 갱신
+```
+
+실행 데이터는 `.data/`에 저장하고 Git에서는 제외합니다. GitHub Pages 같은 정적 호스팅만으로 Python API 서버가 실행되지는 않습니다. 전체 설계·API·요구사항 대응·한계는 [서버 설계 문서](docs/SYSTEMS.md)를 참고하세요.
+
+## Mini Redis: 해시 테이블과 API 캐시
+
+[![실제 캐시 HIT 응답과 해시 버킷을 보여주는 저장소 실험실](docs/images/systems-cache.png)](docs/images/systems-cache.png)
+
+**시연 순서:** 샘플 기록 저장 → 캐시로 조회(MISS) → 다시 캐시로 조회(HIT) → 캐시 없이 조회(BYPASS). HIT이면 파일을 읽지 않고 해시 테이블에 저장한 API 응답을 반환합니다. TTL은 10초이며 기록을 새로 저장하면 이전 목록 캐시를 삭제합니다.
+
+- FNV-1a 해시, 배열 버킷, 체인으로 충돌 해결, 부하율 0.75 초과 시 2배 확장을 직접 구현했습니다.
+- SET/GET/DEL, TTL 만료 시 삭제, 사용자 키와 API 응답 키 분리, 명령 단위 락을 제공합니다.
+- 아래 KV 실험에서 TTL을 짧게 설정하고 GET을 누르면 `found: false`가 되는 것을 볼 수 있습니다.
+- 선택 구현인 스냅샷은 임시 파일 → fsync → 교체로 저장합니다. 비정상 종료 시 마지막 스냅샷 이후의 캐시 변경은 유실될 수 있습니다.
+
+[해시 테이블·TTL 코드](backend/cache.py) · [API와 캐시 무효화 코드](backend/server.py)
+
+## Mini DBMS: SQL → B+ 트리 → 스레드 풀
+
+[![같은 UI에서 실제 SQL 실행 계획과 읽은 행 수를 확인하는 화면](docs/images/systems-sql.png)](docs/images/systems-sql.png)
+
+| 과제 단계 | 구현한 기능                                                                           | 확인 방법                                            |
+| --------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Phase 1   | SQL tokenizer/parser, INSERT/SELECT, 자동 ID, 테이블별 JSONL 파일                     | `npm run sql -- examples/demo.sql`                   |
+| Phase 2   | 직접 만든 B+ 트리의 노드 분할·리프 연결, ID → 파일 바이트 위치, 재시작 시 인덱스 복원 | ID 검색과 이름 검색에서 `plan`, `rows_examined` 비교 |
+| Phase 3   | 동일 엔진을 사용하는 HTTP API, 기본 8개 워커의 Thread Pool, 제한된 대기 큐            | 응답의 실제 `worker` 이름, 동시 HTTP 테스트          |
+
+**시연 순서:** ID 검색 예시 → SQL 실행 → `B+TREE`와 읽은 행 수 확인 → 이름 검색 예시 → SQL 실행 → `FULL_SCAN` 비교. 오른쪽은 실제 서버 응답입니다. 100만 건 데이터는 화면용 폴더와 분리한 임시 폴더에서 측정합니다.
+
+동시 INSERT의 **ID 발급·파일 쓰기·인덱스 갱신**은 테이블 락으로 보호합니다. 캐시를 채우는 도중 다른 요청이 데이터를 저장해 오래된 응답이 남는 문제도 별도 락으로 방지합니다. 같은 테이블 작업은 직렬화하며, 스레드 수만큼 CPU 처리 속도가 증가한다고 주장하지 않습니다.
+
+[SQL 파서](backend/sql.py) · [파일 DB](backend/database.py) · [B+ 트리](backend/bptree.py) · [스레드 풀 API](backend/server.py)
+
+## 100만 건과 캐시 성능 실측
+
+2026-11-13, Windows 11 / Python 3.14.2에서 측정했습니다. 가짜 지연은 추가하지 않았습니다.
+
+| 비교 항목                       | 측정 결과                                    |
+| ------------------------------- | -------------------------------------------- |
+| SQL 파싱 포함 100만 건 삽입     | 약 35.11초, 1만 건 단위 fsync                |
+| ID 인덱스 검색 중앙값           | **0.314ms**, 트리 노드 4개 + 레코드 1개 읽음 |
+| 이름 선형 검색 중앙값           | **3,198.444ms**, 레코드 100만 개 읽음        |
+| 캐시 없이 실제 HTTP 조회 중앙값 | **2.078ms**                                  |
+| 캐시 HIT 실제 HTTP 조회 중앙값  | **1.674ms** (이번 측정에서 약 1.24배)        |
+
+인덱스 비교는 동일한 마지막 레코드를 5회씩 조회한 결과입니다. 캐시 비교는 1,000개 기록 중 첫 100개를 반환하는 같은 API를 30회씩 호출했습니다. 파일의 OS 캐시는 워밍업된 상태이며 캐시 값 복사·JSON 직렬화·HTTP 비용도 존재합니다. 데이터가 작으면 캐시가 더 느릴 수도 있습니다. 실제 Redis 제품과의 성능 비교가 아닙니다.
+
+```bash
+npm run test:backend  # Redis/DBMS 단위·동시성·실제 HTTP 기능 테스트
+npm run bench         # 임시 폴더에서 100만 건 측정 후 JSON 보고서 생성
+```
+
+[원본 측정값과 환경](docs/benchmarks/latest.json) · [재현 코드](backend/benchmark.py) · [상세 설계와 지원 SQL 범위](docs/SYSTEMS.md)
+
+아래는 기존 **Mini React 구현** 설명과 발표 대본입니다. Redis/DBMS의 Phase 번호와 별개의 과제 단계입니다.
 
 ## Phase 2 상태와 Hooks
 
@@ -219,11 +294,12 @@ await app.whenIdle();
 ## 검증과 차별점
 
 - **41개 단위·통합·회귀 테스트**: 실제 DOM 객체의 동일성까지 검증
+- **23개 서버 테스트**: 해시 충돌·TTL·스냅샷, B+ 트리 불변식, 파일 복원·손상 감지, 동시 요청·과부하와 캐시 무효화 검증
 - **컴파일 전용 타입 계약**: 잘못된 상태 값·updater 반환형·자식 props·effect 반환값·Patch 계획을 타입 검사에서 거부
 - 120개의 결정적 무작위 key 배열 변경을 새 렌더링 결과와 대조
 - 초기화·이벤트 교체·폼 값·SVG·주석·공백·빈 트리·중복 key 검사
 - Hook 순서 위반, render 중 DOM 불변, render 도중 들어온 상태 변경, unmount와 이전 setter 검사
-- GitHub Actions CI에서 E2E 4개 시나리오를 데스크톱과 모바일 Chromium 프로필로 각각 실행
+- E2E 7개 시나리오를 데스크톱과 모바일 프로필로 각각 실행(총 14개). 로컬 Edge 검증을 완료했으며 CI는 Chromium을 사용합니다.
 - 카드 뒤집기와 짝 맞춤, 시도 횟수와 배칭 기록, `useEffect` 타이머, 검사기 탭과 실제 Patch 기록을 브라우저에서 확인
 
 `PATCH OPS`는 이벤트 리스너 교체를 포함한 논리적 Patch 작업 수입니다. 하나의 subtree CREATE도 한 작업으로 셉니다. 실제 브라우저 layout/paint 횟수나 생성한 전체 DOM 노드 수와 같지 않습니다. 시간 수치는 로컬 측정이며 React와의 성능 비교 결과가 아닙니다.
